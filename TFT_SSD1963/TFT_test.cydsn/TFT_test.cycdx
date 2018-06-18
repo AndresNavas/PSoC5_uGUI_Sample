@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<blockRegMap version="1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://cypress.com/xsd/cyblockregmap cyblockregmap.xsd" xmlns="http://cypress.com/xsd/cyblockregmap">
+  <block name="LED3" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="not_1" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="T_IRQ" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="T_DIN" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="T_DO" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="cy_boot" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="Em_EEPROM_Dynamic" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="LED4" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="Clock_G" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="GlitchFilter" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="T_CLK" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="D_CS" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="D_WR" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="D_RS" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="D_DB" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="Clock_LCD" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="D_RST" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="T_CS" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="GraphicLCDIntf" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="D_RD" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+  <block name="D_BL" BASE="0x0" SIZE="0x0" desc="" visible="true" hidden="false" />
+</blockRegMap>
