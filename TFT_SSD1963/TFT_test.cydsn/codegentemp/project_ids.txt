@@ -1,0 +1,8 @@
+C:\Users\afne7\Desktop\SAFE\Firmware\LCD_test\TFT_SSD1963\TFT_test.cydsn\TFT_test.cyprj|33c9381e-7dd2-4cf8-afcb-bacd51b53f7e
+C:\Program Files (x86)\Cypress\PSoC Creator\4.2\PSoC Creator\psoc\content\default\CyAnnotationLibrary\CyAnnotationLibrary.cylib\CyAnnotationLibrary.cyprj|1a701390-8085-49b6-82ef-c92ec80f60cb
+C:\Users\afne7\Documents\PSoC Creator\4.2\Downloads ( 4.2).cylib\Downloads ( 4.2).cyprj|035bad41-1b0a-4ddd-ab01-6f6c52e3bc2b
+C:\Users\afne7\Documents\PSoC Creator\4.1\Downloads ( 4.1).cylib\Downloads ( 4.1).cyprj|86f163b6-3fcb-411c-9b86-2a1a23f69970
+C:\Program Files (x86)\Cypress\PSoC Creator\4.2\PSoC Creator\psoc\content\cycomponentlibraryupdates\CyComponentLibraryUpdates.cylib\CyComponentLibraryUpdates.cyprj|9cb6338d-89cd-49af-82ca-8b1122938153
+C:\Program Files (x86)\Cypress\PSoC Creator\4.2\PSoC Creator\psoc\content\cycomponentlibrary\CyComponentLibrary.cylib\CyComponentLibrary.cyprj|8088d2f9-c2c2-48b2-8b5c-c036e0c4136f
+C:\Program Files (x86)\Cypress\PSoC Creator\4.2\PSoC Creator\psoc\content\cyprimitives\CyPrimitives.cylib\CyPrimitives.cyprj|ebec433d-3470-4101-bd74-acb6815406b1
+C:\Program Files (x86)\Cypress\PSoC Creator\4.2\PSoC Creator\dev\psoc3\AnalogDevice\PSoC35AnalogDevice.cylib\PSoC35AnalogDevice.cyprj|28dfa6b4-500f-4527-9325-4ce1d5eeacd9
