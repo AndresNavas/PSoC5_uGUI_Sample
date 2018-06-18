@@ -1,0 +1,17 @@
+* Description:
+*  This is a driver for the uGui graphical library developed by 
+*  Achim Döbler. http://www.embeddedlightning.com/
+*
+*  It is for SSD1963 graphic controller found in a lot of low cost graphics 
+*  chinese displays and to be used with PSoC microcontrollers from Cypress.
+*
+*  Link to the 5" LCD Panel used: 
+*  https://www.aliexpress.com/item/Consumer-Electronics-Shop-Free-shipping-5-TFT-LCD-SS63-Module-Display-Touch-Panel-Screen-PCB-Adapter/32603464488.html?spm=a2g0s.9042311.0.0.27424c4dwb4qzi
+* 
+*
+* Log version:
+*  1.0 - June, 2018.       First version.
+*
+********************************************************************************
+* Copyright (c) 2018 Andres F. Navas
+* This driver is free to use with the uGui library.
