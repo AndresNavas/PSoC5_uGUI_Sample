@@ -1,0 +1,9 @@
+Last Modified Date & Time: 06/12/2018 09:46:38
+
+TFT_test: TopDesign.cysch
+	D_CLK [v2.10] to [v2.20]
+	D_CS [v2.10] to [v2.20]
+	D_IN [v2.10] to [v2.20]
+	D_OUT [v2.10] to [v2.20]
+
+
