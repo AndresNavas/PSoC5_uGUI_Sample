@@ -1,0 +1,50 @@
+dont_use_io iocell 1 0
+dont_use_io iocell 1 1
+dont_use_io iocell 1 3
+set_location "\GlitchFilter:genblk2:Counter0:DP:u0\" datapathcell 1 0 2 
+set_location "tmpOE__D_DB_net_7" macrocell 0 0 0 3
+set_location "Net_5" macrocell 1 0 0 1
+set_location "\GraphicLCDIntf:full\" macrocell 1 0 0 2
+set_location "\GraphicLCDIntf:GraphLcd8:Lsb\" datapathcell 0 0 2 
+set_location "Net_14" macrocell 1 0 1 0
+set_location "Net_4" macrocell 0 0 1 2
+set_location "\GraphicLCDIntf:state_3\" macrocell 0 0 0 2
+set_location "Net_2" macrocell 0 0 1 3
+set_location "\GraphicLCDIntf:status_1\" macrocell 0 0 0 1
+set_location "Net_17" macrocell 1 0 1 1
+set_location "\GraphicLCDIntf:state_2\" macrocell 0 0 1 0
+set_location "\GraphicLCDIntf:state_1\" macrocell 0 0 0 0
+set_location "Net_3" macrocell 0 0 1 1
+set_location "\GraphicLCDIntf:state_0\" macrocell 1 0 0 0
+set_io "D_DB(5)" iocell 5 5
+set_io "D_DB(3)" iocell 5 3
+set_io "LED3(0)" iocell 6 2
+set_io "D_DB(1)" iocell 5 1
+# Note: port 12 is the logical name for port 7
+set_io "D_WR(0)" iocell 12 5
+set_io "D_DB(2)" iocell 5 2
+set_location "\GraphicLCDIntf:LsbReg\" statuscell 0 0 3 
+set_location "ClockBlock" clockblockcell -1 -1 0
+# Note: port 12 is the logical name for port 7
+set_io "D_RD(0)" iocell 12 6
+set_io "D_DB(6)" iocell 5 6
+set_io "D_DB(4)" iocell 5 4
+set_io "D_DB(0)" iocell 5 0
+set_location "\GraphicLCDIntf:StsReg\" statuscell 1 0 3 
+# Note: port 12 is the logical name for port 7
+set_io "D_CS(0)" iocell 12 7
+# Note: port 12 is the logical name for port 7
+set_io "T_DO(0)" iocell 12 0
+# Note: port 12 is the logical name for port 7
+set_io "D_RS(0)" iocell 12 4
+set_io "D_BL(0)" iocell 6 6
+set_io "D_RST(0)" iocell 6 0
+# Note: port 12 is the logical name for port 7
+set_io "T_CS(0)" iocell 12 2
+# Note: port 12 is the logical name for port 7
+set_io "T_CLK(0)" iocell 12 3
+# Note: port 12 is the logical name for port 7
+set_io "T_DIN(0)" iocell 12 1
+set_io "LED4(0)" iocell 6 3
+set_io "T_IRQ(0)" iocell 3 0
+set_io "D_DB(7)" iocell 5 7
