@@ -1,0 +1,3394 @@
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 1
+
+
+   1              		.syntax unified
+   2              		.cpu cortex-m3
+   3              		.fpu softvfp
+   4              		.eabi_attribute 20, 1
+   5              		.eabi_attribute 21, 1
+   6              		.eabi_attribute 23, 3
+   7              		.eabi_attribute 24, 1
+   8              		.eabi_attribute 25, 1
+   9              		.eabi_attribute 26, 1
+  10              		.eabi_attribute 30, 1
+  11              		.eabi_attribute 34, 1
+  12              		.eabi_attribute 18, 4
+  13              		.thumb
+  14              		.syntax unified
+  15              		.file	"XPT2046.c"
+  16              		.text
+  17              	.Ltext0:
+  18              		.cfi_sections	.debug_frame
+  19              		.section	.text.XPT2046_ReadPos,"ax",%progbits
+  20              		.align	2
+  21              		.global	XPT2046_ReadPos
+  22              		.thumb
+  23              		.thumb_func
+  24              		.type	XPT2046_ReadPos, %function
+  25              	XPT2046_ReadPos:
+  26              	.LFB65:
+  27              		.file 1 "XPT2046.c"
+   1:XPT2046.c     **** /*******************************************************************************
+   2:XPT2046.c     **** * File Name: XPT2046.c
+   3:XPT2046.c     **** *
+   4:XPT2046.c     **** * Description:
+   5:XPT2046.c     **** *  This is a driver for the Touch Screen Controller  XPT2046 
+   6:XPT2046.c     **** *
+   7:XPT2046.c     **** *  Data send and get by SPI
+   8:XPT2046.c     **** *  Read Pos Coordinates X & Y with Basic Calibration
+   9:XPT2046.c     **** *  Read Z Coordinate in Data Raw for Touch Pressure
+  10:XPT2046.c     **** ********************************************************************************
+  11:XPT2046.c     **** * Copyright (c) 2018 Andres F. Navas
+  12:XPT2046.c     **** *******************************************************************************/
+  13:XPT2046.c     **** 
+  14:XPT2046.c     **** #include <project.h>
+  15:XPT2046.c     **** #include <stdlib.h>
+  16:XPT2046.c     **** #include "XPT2046.h"
+  17:XPT2046.c     **** #include "ugui_SSD1963.h"
+  18:XPT2046.c     **** 
+  19:XPT2046.c     **** #define DelayCycles         10      // About 400ns period for 63MHz BUS Clock
+  20:XPT2046.c     **** #define XPT2046_MAX_ADC     0x0fff  // Max ADC Value of 12bits
+  21:XPT2046.c     **** #define X_Min               120     // Min and Max coordinates in raw values for calibration
+  22:XPT2046.c     **** #define X_Max               4000
+  23:XPT2046.c     **** #define Y_Min               200
+  24:XPT2046.c     **** #define Y_Max               3712
+  25:XPT2046.c     **** 
+  26:XPT2046.c     **** //**********************************************************
+  27:XPT2046.c     **** //******** Send data to XPT2046   Touch Controller *********
+  28:XPT2046.c     **** //********            SPI Transaction              *********
+  29:XPT2046.c     **** //**********************************************************
+  30:XPT2046.c     **** inline void Write_2046(unsigned char Num)          
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 2
+
+
+  31:XPT2046.c     **** {
+  32:XPT2046.c     ****     unsigned char count = 0;
+  33:XPT2046.c     ****     T_CLK_Write(0);
+  34:XPT2046.c     ****     for(count = 0; count < 8; count++)  // Command control 8 bits
+  35:XPT2046.c     ****     {
+  36:XPT2046.c     ****         if(Num & 0x80) T_DIN_Write(1);   // Write command from MSB  to LSB        
+  37:XPT2046.c     ****         else T_DIN_Write(0);
+  38:XPT2046.c     ****         T_CLK_Write(0);                 // Rising Edge to write
+  39:XPT2046.c     ****         CyDelayCycles(DelayCycles);
+  40:XPT2046.c     ****         T_CLK_Write(1);
+  41:XPT2046.c     ****         CyDelayCycles(DelayCycles);
+  42:XPT2046.c     ****         Num <<= 1;                      // Shift the register
+  43:XPT2046.c     ****     }
+  44:XPT2046.c     **** }
+  45:XPT2046.c     **** 
+  46:XPT2046.c     **** //**********************************************************
+  47:XPT2046.c     **** //******** Get data from XPT2046  Touch Controller *********
+  48:XPT2046.c     **** //********            SPI Transaction              *********
+  49:XPT2046.c     **** //**********************************************************
+  50:XPT2046.c     **** inline uint16 Read_2046()             
+  51:XPT2046.c     **** {
+  52:XPT2046.c     **** 	uint8 count = 0;
+  53:XPT2046.c     **** 	uint16 Num = 0;
+  54:XPT2046.c     **** 	for(count = 0; count < 12; count++)     // ADC Data read 12 bits
+  55:XPT2046.c     **** 	{
+  56:XPT2046.c     **** 		Num <<= 1;		                    // Shift the register
+  57:XPT2046.c     **** 		T_CLK_Write(1);                     // Falling Edge to read
+  58:XPT2046.c     ****         CyDelayCycles(DelayCycles);           
+  59:XPT2046.c     **** 		T_CLK_Write(0);
+  60:XPT2046.c     ****         CyDelayCycles(DelayCycles);
+  61:XPT2046.c     **** 		Num |= T_DO_Read();	            // Read the data from MSB to LSB
+  62:XPT2046.c     **** 	}
+  63:XPT2046.c     **** 
+  64:XPT2046.c     **** return(Num);
+  65:XPT2046.c     **** }	
+  66:XPT2046.c     **** 
+  67:XPT2046.c     **** //**********************************************************
+  68:XPT2046.c     **** //******    Reading the position of the coordinate    ******
+  69:XPT2046.c     **** //******            Data RAW / 12Bits ADC             ******
+  70:XPT2046.c     **** //**********************************************************
+  71:XPT2046.c     **** uint16 XPT2046_ReadPos(uint16 coord)
+  72:XPT2046.c     **** {
+  28              		.loc 1 72 0
+  29              		.cfi_startproc
+  30              		@ args = 0, pretend = 0, frame = 0
+  31              		@ frame_needed = 0, uses_anonymous_args = 0
+  32              	.LVL0:
+  33 0000 38B5     		push	{r3, r4, r5, lr}
+  34              		.cfi_def_cfa_offset 16
+  35              		.cfi_offset 3, -16
+  36              		.cfi_offset 4, -12
+  37              		.cfi_offset 5, -8
+  38              		.cfi_offset 14, -4
+  39 0002 0446     		mov	r4, r0
+  73:XPT2046.c     ****     uint16 pos;
+  74:XPT2046.c     ****     T_CS_Write(0);
+  40              		.loc 1 74 0
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 3
+
+
+  41 0004 0020     		movs	r0, #0
+  42              	.LVL1:
+  43 0006 FFF7FEFF 		bl	T_CS_Write
+  44              	.LVL2:
+  75:XPT2046.c     ****     Write_2046(coord);                    // Send Command     
+  45              		.loc 1 75 0
+  46 000a E4B2     		uxtb	r4, r4
+  47              	.LVL3:
+  48              	.LBB6:
+  49              	.LBB7:
+  33:XPT2046.c     ****     for(count = 0; count < 8; count++)  // Command control 8 bits
+  50              		.loc 1 33 0
+  51 000c 0020     		movs	r0, #0
+  52 000e FFF7FEFF 		bl	T_CLK_Write
+  53              	.LVL4:
+  34:XPT2046.c     ****     {
+  54              		.loc 1 34 0
+  55 0012 0025     		movs	r5, #0
+  56 0014 19E0     		b	.L2
+  57              	.LVL5:
+  58              	.L5:
+  36:XPT2046.c     ****         else T_DIN_Write(0);
+  59              		.loc 1 36 0
+  60 0016 14F0800F 		tst	r4, #128
+  61 001a 03D0     		beq	.L3
+  62 001c 0120     		movs	r0, #1
+  63 001e FFF7FEFF 		bl	T_DIN_Write
+  64              	.LVL6:
+  65 0022 02E0     		b	.L4
+  66              	.L3:
+  37:XPT2046.c     ****         T_CLK_Write(0);                 // Rising Edge to write
+  67              		.loc 1 37 0
+  68 0024 0020     		movs	r0, #0
+  69 0026 FFF7FEFF 		bl	T_DIN_Write
+  70              	.LVL7:
+  71              	.L4:
+  38:XPT2046.c     ****         CyDelayCycles(DelayCycles);
+  72              		.loc 1 38 0
+  73 002a 0020     		movs	r0, #0
+  74 002c FFF7FEFF 		bl	T_CLK_Write
+  75              	.LVL8:
+  39:XPT2046.c     ****         T_CLK_Write(1);
+  76              		.loc 1 39 0
+  77 0030 0A20     		movs	r0, #10
+  78 0032 FFF7FEFF 		bl	CyDelayCycles
+  79              	.LVL9:
+  40:XPT2046.c     ****         CyDelayCycles(DelayCycles);
+  80              		.loc 1 40 0
+  81 0036 0120     		movs	r0, #1
+  82 0038 FFF7FEFF 		bl	T_CLK_Write
+  83              	.LVL10:
+  41:XPT2046.c     ****         Num <<= 1;                      // Shift the register
+  84              		.loc 1 41 0
+  85 003c 0A20     		movs	r0, #10
+  86 003e FFF7FEFF 		bl	CyDelayCycles
+  87              	.LVL11:
+  42:XPT2046.c     ****     }
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 4
+
+
+  88              		.loc 1 42 0
+  89 0042 6400     		lsls	r4, r4, #1
+  90              	.LVL12:
+  91 0044 E4B2     		uxtb	r4, r4
+  92              	.LVL13:
+  34:XPT2046.c     ****     {
+  93              		.loc 1 34 0
+  94 0046 0135     		adds	r5, r5, #1
+  95              	.LVL14:
+  96 0048 EDB2     		uxtb	r5, r5
+  97              	.LVL15:
+  98              	.L2:
+  99 004a 072D     		cmp	r5, #7
+ 100 004c E3D9     		bls	.L5
+ 101              	.LVL16:
+ 102              	.LBE7:
+ 103              	.LBE6:
+  76:XPT2046.c     ****     T_CLK_Write(1);
+ 104              		.loc 1 76 0
+ 105 004e 0120     		movs	r0, #1
+ 106 0050 FFF7FEFF 		bl	T_CLK_Write
+ 107              	.LVL17:
+  77:XPT2046.c     ****     CyDelayCycles(DelayCycles);           //Falling Edge to continue
+ 108              		.loc 1 77 0
+ 109 0054 0A20     		movs	r0, #10
+ 110 0056 FFF7FEFF 		bl	CyDelayCycles
+ 111              	.LVL18:
+  78:XPT2046.c     ****     T_CLK_Write(0);
+ 112              		.loc 1 78 0
+ 113 005a 0020     		movs	r0, #0
+ 114 005c FFF7FEFF 		bl	T_CLK_Write
+ 115              	.LVL19:
+  79:XPT2046.c     ****     CyDelayCycles(DelayCycles);
+ 116              		.loc 1 79 0
+ 117 0060 0A20     		movs	r0, #10
+ 118 0062 FFF7FEFF 		bl	CyDelayCycles
+ 119              	.LVL20:
+ 120              	.LBB8:
+ 121              	.LBB9:
+  53:XPT2046.c     **** 	for(count = 0; count < 12; count++)     // ADC Data read 12 bits
+ 122              		.loc 1 53 0
+ 123 0066 0024     		movs	r4, #0
+  54:XPT2046.c     **** 	{
+ 124              		.loc 1 54 0
+ 125 0068 2546     		mov	r5, r4
+ 126 006a 13E0     		b	.L6
+ 127              	.LVL21:
+ 128              	.L7:
+  56:XPT2046.c     **** 		T_CLK_Write(1);                     // Falling Edge to read
+ 129              		.loc 1 56 0
+ 130 006c 6400     		lsls	r4, r4, #1
+ 131              	.LVL22:
+ 132 006e A4B2     		uxth	r4, r4
+ 133              	.LVL23:
+  57:XPT2046.c     ****         CyDelayCycles(DelayCycles);           
+ 134              		.loc 1 57 0
+ 135 0070 0120     		movs	r0, #1
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 5
+
+
+ 136 0072 FFF7FEFF 		bl	T_CLK_Write
+ 137              	.LVL24:
+  58:XPT2046.c     **** 		T_CLK_Write(0);
+ 138              		.loc 1 58 0
+ 139 0076 0A20     		movs	r0, #10
+ 140 0078 FFF7FEFF 		bl	CyDelayCycles
+ 141              	.LVL25:
+  59:XPT2046.c     ****         CyDelayCycles(DelayCycles);
+ 142              		.loc 1 59 0
+ 143 007c 0020     		movs	r0, #0
+ 144 007e FFF7FEFF 		bl	T_CLK_Write
+ 145              	.LVL26:
+  60:XPT2046.c     **** 		Num |= T_DO_Read();	            // Read the data from MSB to LSB
+ 146              		.loc 1 60 0
+ 147 0082 0A20     		movs	r0, #10
+ 148 0084 FFF7FEFF 		bl	CyDelayCycles
+ 149              	.LVL27:
+  61:XPT2046.c     **** 	}
+ 150              		.loc 1 61 0
+ 151 0088 FFF7FEFF 		bl	T_DO_Read
+ 152              	.LVL28:
+ 153 008c 2043     		orrs	r0, r0, r4
+ 154 008e 84B2     		uxth	r4, r0
+ 155              	.LVL29:
+  54:XPT2046.c     **** 	{
+ 156              		.loc 1 54 0
+ 157 0090 0135     		adds	r5, r5, #1
+ 158              	.LVL30:
+ 159 0092 EDB2     		uxtb	r5, r5
+ 160              	.LVL31:
+ 161              	.L6:
+ 162 0094 0B2D     		cmp	r5, #11
+ 163 0096 E9D9     		bls	.L7
+ 164              	.LVL32:
+ 165              	.LBE9:
+ 166              	.LBE8:
+  80:XPT2046.c     ****     pos = Read_2046();                    // Read ADC data
+  81:XPT2046.c     ****     T_CS_Write(1);
+ 167              		.loc 1 81 0
+ 168 0098 0120     		movs	r0, #1
+ 169 009a FFF7FEFF 		bl	T_CS_Write
+ 170              	.LVL33:
+  82:XPT2046.c     ****     return pos;
+  83:XPT2046.c     **** }
+ 171              		.loc 1 83 0
+ 172 009e 2046     		mov	r0, r4
+ 173 00a0 38BD     		pop	{r3, r4, r5, pc}
+ 174              		.cfi_endproc
+ 175              	.LFE65:
+ 176              		.size	XPT2046_ReadPos, .-XPT2046_ReadPos
+ 177 00a2 00BF     		.section	.text.XPT2046_Start,"ax",%progbits
+ 178              		.align	2
+ 179              		.global	XPT2046_Start
+ 180              		.thumb
+ 181              		.thumb_func
+ 182              		.type	XPT2046_Start, %function
+ 183              	XPT2046_Start:
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 6
+
+
+ 184              	.LFB66:
+  84:XPT2046.c     **** 
+  85:XPT2046.c     **** //**********************************************************
+  86:XPT2046.c     **** //*****************    Start controller   ******************
+  87:XPT2046.c     **** //*****************  Enable the Touch IRQ ******************
+  88:XPT2046.c     **** //**********************************************************
+  89:XPT2046.c     **** void XPT2046_Start(void)
+  90:XPT2046.c     **** {
+ 185              		.loc 1 90 0
+ 186              		.cfi_startproc
+ 187              		@ args = 0, pretend = 0, frame = 0
+ 188              		@ frame_needed = 0, uses_anonymous_args = 0
+ 189 0000 08B5     		push	{r3, lr}
+ 190              		.cfi_def_cfa_offset 8
+ 191              		.cfi_offset 3, -8
+ 192              		.cfi_offset 14, -4
+  91:XPT2046.c     ****     XPT2046_ReadPos(0x80);
+ 193              		.loc 1 91 0
+ 194 0002 8020     		movs	r0, #128
+ 195 0004 FFF7FEFF 		bl	XPT2046_ReadPos
+ 196              	.LVL34:
+  92:XPT2046.c     ****     CyDelay(5);
+ 197              		.loc 1 92 0
+ 198 0008 0520     		movs	r0, #5
+ 199 000a FFF7FEFF 		bl	CyDelay
+ 200              	.LVL35:
+ 201 000e 08BD     		pop	{r3, pc}
+ 202              		.cfi_endproc
+ 203              	.LFE66:
+ 204              		.size	XPT2046_Start, .-XPT2046_Start
+ 205              		.section	.text.XPT2046_ReadXY,"ax",%progbits
+ 206              		.align	2
+ 207              		.global	XPT2046_ReadXY
+ 208              		.thumb
+ 209              		.thumb_func
+ 210              		.type	XPT2046_ReadXY, %function
+ 211              	XPT2046_ReadXY:
+ 212              	.LFB67:
+  93:XPT2046.c     **** }
+  94:XPT2046.c     **** 
+  95:XPT2046.c     **** //**********************************************************
+  96:XPT2046.c     **** //*****************   Obtain X and Y Pos  ******************
+  97:XPT2046.c     **** //*****************   Basic  Calibration  ******************
+  98:XPT2046.c     **** //**********************************************************
+  99:XPT2046.c     **** uint8 XPT2046_ReadXY(uint16 *X,  uint16 *Y)  // Return 1 if data is valid
+ 100:XPT2046.c     **** {
+ 213              		.loc 1 100 0
+ 214              		.cfi_startproc
+ 215              		@ args = 0, pretend = 0, frame = 0
+ 216              		@ frame_needed = 0, uses_anonymous_args = 0
+ 217              	.LVL36:
+ 218 0000 2DE9F843 		push	{r3, r4, r5, r6, r7, r8, r9, lr}
+ 219              		.cfi_def_cfa_offset 32
+ 220              		.cfi_offset 3, -32
+ 221              		.cfi_offset 4, -28
+ 222              		.cfi_offset 5, -24
+ 223              		.cfi_offset 6, -20
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 7
+
+
+ 224              		.cfi_offset 7, -16
+ 225              		.cfi_offset 8, -12
+ 226              		.cfi_offset 9, -8
+ 227              		.cfi_offset 14, -4
+ 228 0004 8146     		mov	r9, r0
+ 229 0006 8846     		mov	r8, r1
+ 230              	.LVL37:
+ 101:XPT2046.c     ****     uint16 x0, y0, x1, y1, xav, yav, px, py;
+ 102:XPT2046.c     ****     uint16 timeout = 0;
+ 231              		.loc 1 102 0
+ 232 0008 0025     		movs	r5, #0
+ 233              	.LVL38:
+ 234              	.L13:
+ 103:XPT2046.c     ****     
+ 104:XPT2046.c     ****     do{         
+ 105:XPT2046.c     ****         XPT2046_ReadPos(0x90);                         
+ 235              		.loc 1 105 0 discriminator 5
+ 236 000a 9020     		movs	r0, #144
+ 237 000c FFF7FEFF 		bl	XPT2046_ReadPos
+ 238              	.LVL39:
+ 106:XPT2046.c     ****         y0 = XPT2046_ReadPos(0x90);     // read coordinate Y
+ 239              		.loc 1 106 0 discriminator 5
+ 240 0010 9020     		movs	r0, #144
+ 241 0012 FFF7FEFF 		bl	XPT2046_ReadPos
+ 242              	.LVL40:
+ 243 0016 0746     		mov	r7, r0
+ 244              	.LVL41:
+ 107:XPT2046.c     ****         y1 = XPT2046_ReadPos(0x90);     // again...
+ 245              		.loc 1 107 0 discriminator 5
+ 246 0018 9020     		movs	r0, #144
+ 247 001a FFF7FEFF 		bl	XPT2046_ReadPos
+ 248              	.LVL42:
+ 249 001e 0646     		mov	r6, r0
+ 250              	.LVL43:
+ 108:XPT2046.c     ****                               
+ 109:XPT2046.c     ****         XPT2046_ReadPos(0xd0);
+ 251              		.loc 1 109 0 discriminator 5
+ 252 0020 D020     		movs	r0, #208
+ 253 0022 FFF7FEFF 		bl	XPT2046_ReadPos
+ 254              	.LVL44:
+ 110:XPT2046.c     ****         x0 = XPT2046_ReadPos(0xd0);     // read coordinate X
+ 255              		.loc 1 110 0 discriminator 5
+ 256 0026 D020     		movs	r0, #208
+ 257 0028 FFF7FEFF 		bl	XPT2046_ReadPos
+ 258              	.LVL45:
+ 259 002c 0446     		mov	r4, r0
+ 260              	.LVL46:
+ 111:XPT2046.c     ****         x1 = XPT2046_ReadPos(0xd0);	    // again...                     
+ 261              		.loc 1 111 0 discriminator 5
+ 262 002e D020     		movs	r0, #208
+ 263 0030 FFF7FEFF 		bl	XPT2046_ReadPos
+ 264              	.LVL47:
+ 112:XPT2046.c     ****         
+ 113:XPT2046.c     ****         timeout++;                      // Incr. Time Out
+ 265              		.loc 1 113 0 discriminator 5
+ 266 0034 0135     		adds	r5, r5, #1
+ 267              	.LVL48:
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 8
+
+
+ 268 0036 ADB2     		uxth	r5, r5
+ 269              	.LVL49:
+ 114:XPT2046.c     ****    }while(((abs(x0 - x1) > 50) && (abs(y0 - y1) > 50)) || timeout >= 255);     // Cycle if the erro
+ 270              		.loc 1 114 0 discriminator 5
+ 271 0038 2146     		mov	r1, r4
+ 272 003a 0246     		mov	r2, r0
+ 273 003c 241A     		subs	r4, r4, r0
+ 274              	.LVL50:
+ 275 003e 002C     		cmp	r4, #0
+ 276 0040 B8BF     		it	lt
+ 277 0042 6442     		rsblt	r4, r4, #0
+ 278 0044 322C     		cmp	r4, #50
+ 279 0046 05DD     		ble	.L12
+ 280              		.loc 1 114 0 is_stmt 0 discriminator 1
+ 281 0048 BB1B     		subs	r3, r7, r6
+ 282 004a 002B     		cmp	r3, #0
+ 283 004c B8BF     		it	lt
+ 284 004e 5B42     		rsblt	r3, r3, #0
+ 285 0050 322B     		cmp	r3, #50
+ 286 0052 DADC     		bgt	.L13
+ 287              	.L12:
+ 288              		.loc 1 114 0 discriminator 4
+ 289 0054 FE2D     		cmp	r5, #254
+ 290 0056 D8D8     		bhi	.L13
+ 115:XPT2046.c     **** 
+ 116:XPT2046.c     ****     if(timeout < 255)       // Cycle ends with good data
+ 291              		.loc 1 116 0 is_stmt 1
+ 292 0058 36D8     		bhi	.L17
+ 117:XPT2046.c     ****     { 
+ 118:XPT2046.c     ****         // Update the current coordinate values
+ 119:XPT2046.c     ****         xav  = (x0 + x1)/2;                                     // Data raw Average for X and Y
+ 293              		.loc 1 119 0
+ 294 005a 0A44     		add	r2, r2, r1
+ 295 005c 02EBD272 		add	r2, r2, r2, lsr #31
+ 296              	.LVL51:
+ 120:XPT2046.c     ****         yav  = XPT2046_MAX_ADC - ((y0 + y1)/2);                 // Normalization of touchpad to ach
+ 297              		.loc 1 120 0
+ 298 0060 3E44     		add	r6, r6, r7
+ 299              	.LVL52:
+ 300 0062 06EBD676 		add	r6, r6, r6, lsr #31
+ 301 0066 40F6FF73 		movw	r3, #4095
+ 302 006a A3EB6606 		sub	r6, r3, r6, asr #1
+ 303 006e B6B2     		uxth	r6, r6
+ 304              	.LVL53:
+ 121:XPT2046.c     ****         px = ((xav - X_Min) * DISPLAY_WIDTH) / (X_Max - X_Min); // Calibration for LCD Panel Size; 
+ 305              		.loc 1 121 0
+ 306 0070 C2F34F03 		ubfx	r3, r2, #1, #16
+ 307 0074 783B     		subs	r3, r3, #120
+ 308 0076 4FF44872 		mov	r2, #800
+ 309              	.LVL54:
+ 310 007a 02FB03F3 		mul	r3, r2, r3
+ 311 007e 144A     		ldr	r2, .L21
+ 312 0080 82FB0312 		smull	r1, r2, r2, r3
+ 313              	.LVL55:
+ 314 0084 1A44     		add	r2, r2, r3
+ 315 0086 DB17     		asrs	r3, r3, #31
+ 316 0088 C3EBE223 		rsb	r3, r3, r2, asr #11
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 9
+
+
+ 317 008c 9BB2     		uxth	r3, r3
+ 318              	.LVL56:
+ 122:XPT2046.c     ****         if(px <= 0) px = 0;
+ 123:XPT2046.c     ****         if(px >= DISPLAY_WIDTH) px = DISPLAY_WIDTH;
+ 319              		.loc 1 123 0
+ 320 008e B3F5487F 		cmp	r3, #800
+ 321 0092 01D3     		bcc	.L15
+ 322 0094 4FF44873 		mov	r3, #800
+ 323              	.LVL57:
+ 324              	.L15:
+ 124:XPT2046.c     ****         py = ((yav - Y_Min) * DISPLAY_HEIGHT) / (Y_Max - Y_Min);
+ 325              		.loc 1 124 0
+ 326 0098 A6F1C802 		sub	r2, r6, #200
+ 327 009c C2EB0212 		rsb	r2, r2, r2, lsl #4
+ 328 00a0 5101     		lsls	r1, r2, #5
+ 329 00a2 0C4A     		ldr	r2, .L21+4
+ 330 00a4 82FB0102 		smull	r0, r2, r2, r1
+ 331              	.LVL58:
+ 332 00a8 C917     		asrs	r1, r1, #31
+ 333 00aa C1EB2222 		rsb	r2, r1, r2, asr #8
+ 334 00ae 92B2     		uxth	r2, r2
+ 335              	.LVL59:
+ 125:XPT2046.c     ****         if(py <= 0) py = 0;
+ 126:XPT2046.c     ****         if(py >= DISPLAY_HEIGHT) py = DISPLAY_HEIGHT;
+ 336              		.loc 1 126 0
+ 337 00b0 B2F5F07F 		cmp	r2, #480
+ 338 00b4 01D3     		bcc	.L16
+ 339 00b6 4FF4F072 		mov	r2, #480
+ 340              	.LVL60:
+ 341              	.L16:
+ 127:XPT2046.c     ****         *X = px;
+ 342              		.loc 1 127 0
+ 343 00ba A9F80030 		strh	r3, [r9]	@ movhi
+ 128:XPT2046.c     ****         *Y = py;
+ 344              		.loc 1 128 0
+ 345 00be A8F80020 		strh	r2, [r8]	@ movhi
+ 129:XPT2046.c     ****         return(1);      // Data Valid
+ 346              		.loc 1 129 0
+ 347 00c2 0120     		movs	r0, #1
+ 348 00c4 BDE8F883 		pop	{r3, r4, r5, r6, r7, r8, r9, pc}
+ 349              	.LVL61:
+ 350              	.L17:
+ 130:XPT2046.c     ****     }
+ 131:XPT2046.c     ****     else
+ 132:XPT2046.c     ****     {
+ 133:XPT2046.c     ****         return(0);      // Data not valid
+ 351              		.loc 1 133 0
+ 352 00c8 0020     		movs	r0, #0
+ 353              	.LVL62:
+ 134:XPT2046.c     ****     }
+ 135:XPT2046.c     **** }
+ 354              		.loc 1 135 0
+ 355 00ca BDE8F883 		pop	{r3, r4, r5, r6, r7, r8, r9, pc}
+ 356              	.LVL63:
+ 357              	.L22:
+ 358 00ce 00BF     		.align	2
+ 359              	.L21:
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 10
+
+
+ 360 00d0 AD322087 		.word	-2027933011
+ 361 00d4 931CA912 		.word	313072787
+ 362              		.cfi_endproc
+ 363              	.LFE67:
+ 364              		.size	XPT2046_ReadXY, .-XPT2046_ReadXY
+ 365              		.section	.text.XPT2046_ReadZ,"ax",%progbits
+ 366              		.align	2
+ 367              		.global	XPT2046_ReadZ
+ 368              		.thumb
+ 369              		.thumb_func
+ 370              		.type	XPT2046_ReadZ, %function
+ 371              	XPT2046_ReadZ:
+ 372              	.LFB68:
+ 136:XPT2046.c     **** 
+ 137:XPT2046.c     **** //**********************************************************
+ 138:XPT2046.c     **** //**************    Obtain Z Coordinate    *****************
+ 139:XPT2046.c     **** //**************  Touch Pressure RAW Data  *****************
+ 140:XPT2046.c     **** //**********************************************************
+ 141:XPT2046.c     **** uint16 XPT2046_ReadZ(void)
+ 142:XPT2046.c     **** {
+ 373              		.loc 1 142 0
+ 374              		.cfi_startproc
+ 375              		@ args = 0, pretend = 0, frame = 0
+ 376              		@ frame_needed = 0, uses_anonymous_args = 0
+ 377 0000 10B5     		push	{r4, lr}
+ 378              		.cfi_def_cfa_offset 8
+ 379              		.cfi_offset 4, -8
+ 380              		.cfi_offset 14, -4
+ 143:XPT2046.c     ****     return(XPT2046_ReadPos(0xc0) - XPT2046_ReadPos(0xb0));      // Z Data Raw is inverse, so 4095 i
+ 381              		.loc 1 143 0
+ 382 0002 C020     		movs	r0, #192
+ 383 0004 FFF7FEFF 		bl	XPT2046_ReadPos
+ 384              	.LVL64:
+ 385 0008 0446     		mov	r4, r0
+ 386 000a B020     		movs	r0, #176
+ 387 000c FFF7FEFF 		bl	XPT2046_ReadPos
+ 388              	.LVL65:
+ 389 0010 201A     		subs	r0, r4, r0
+ 144:XPT2046.c     **** }
+ 390              		.loc 1 144 0
+ 391 0012 80B2     		uxth	r0, r0
+ 392 0014 10BD     		pop	{r4, pc}
+ 393              		.cfi_endproc
+ 394              	.LFE68:
+ 395              		.size	XPT2046_ReadZ, .-XPT2046_ReadZ
+ 396              		.comm	gui1963,120,4
+ 397              		.comm	PosY,2,2
+ 398              		.comm	PosX,2,2
+ 399 0016 00BF     		.text
+ 400              	.Letext0:
+ 401              		.file 2 "c:\\program files (x86)\\cypress\\psoc creator\\4.2\\psoc creator\\import\\gnu\\arm\\5.4.
+ 402              		.file 3 "c:\\program files (x86)\\cypress\\psoc creator\\4.2\\psoc creator\\import\\gnu\\arm\\5.4.
+ 403              		.file 4 "Generated_Source\\PSoC5/cytypes.h"
+ 404              		.file 5 ".\\uGUI_Library/ugui_config.h"
+ 405              		.file 6 ".\\uGUI_Library/ugui.h"
+ 406              		.file 7 "Generated_Source\\PSoC5/core_cm3.h"
+ 407              		.file 8 "XPT2046.h"
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 11
+
+
+ 408              		.file 9 ".\\uGUI_Driver/ugui_SSD1963.h"
+ 409              		.file 10 "Generated_Source\\PSoC5/T_CLK.h"
+ 410              		.file 11 "Generated_Source\\PSoC5/T_DIN.h"
+ 411              		.file 12 "Generated_Source\\PSoC5/CyLib.h"
+ 412              		.file 13 "Generated_Source\\PSoC5/T_DO.h"
+ 413              		.file 14 "Generated_Source\\PSoC5/T_CS.h"
+ 414              		.section	.debug_info,"",%progbits
+ 415              	.Ldebug_info0:
+ 416 0000 DB0A0000 		.4byte	0xadb
+ 417 0004 0400     		.2byte	0x4
+ 418 0006 00000000 		.4byte	.Ldebug_abbrev0
+ 419 000a 04       		.byte	0x4
+ 420 000b 01       		.uleb128 0x1
+ 421 000c 6C010000 		.4byte	.LASF110
+ 422 0010 0C       		.byte	0xc
+ 423 0011 2A010000 		.4byte	.LASF111
+ 424 0015 9F020000 		.4byte	.LASF112
+ 425 0019 00000000 		.4byte	.Ldebug_ranges0+0
+ 426 001d 00000000 		.4byte	0
+ 427 0021 00000000 		.4byte	.Ldebug_line0
+ 428 0025 02       		.uleb128 0x2
+ 429 0026 3E030000 		.4byte	.LASF0
+ 430 002a 02       		.byte	0x2
+ 431 002b 1B       		.byte	0x1b
+ 432 002c 30000000 		.4byte	0x30
+ 433 0030 03       		.uleb128 0x3
+ 434 0031 01       		.byte	0x1
+ 435 0032 06       		.byte	0x6
+ 436 0033 8C040000 		.4byte	.LASF2
+ 437 0037 02       		.uleb128 0x2
+ 438 0038 ED030000 		.4byte	.LASF1
+ 439 003c 02       		.byte	0x2
+ 440 003d 1D       		.byte	0x1d
+ 441 003e 42000000 		.4byte	0x42
+ 442 0042 03       		.uleb128 0x3
+ 443 0043 01       		.byte	0x1
+ 444 0044 08       		.byte	0x8
+ 445 0045 3B040000 		.4byte	.LASF3
+ 446 0049 02       		.uleb128 0x2
+ 447 004a FC020000 		.4byte	.LASF4
+ 448 004e 02       		.byte	0x2
+ 449 004f 29       		.byte	0x29
+ 450 0050 54000000 		.4byte	0x54
+ 451 0054 03       		.uleb128 0x3
+ 452 0055 02       		.byte	0x2
+ 453 0056 05       		.byte	0x5
+ 454 0057 98030000 		.4byte	.LASF5
+ 455 005b 02       		.uleb128 0x2
+ 456 005c 34010000 		.4byte	.LASF6
+ 457 0060 02       		.byte	0x2
+ 458 0061 2B       		.byte	0x2b
+ 459 0062 66000000 		.4byte	0x66
+ 460 0066 03       		.uleb128 0x3
+ 461 0067 02       		.byte	0x2
+ 462 0068 07       		.byte	0x7
+ 463 0069 98040000 		.4byte	.LASF7
+ 464 006d 02       		.uleb128 0x2
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 12
+
+
+ 465 006e 7A000000 		.4byte	.LASF8
+ 466 0072 02       		.byte	0x2
+ 467 0073 3F       		.byte	0x3f
+ 468 0074 78000000 		.4byte	0x78
+ 469 0078 03       		.uleb128 0x3
+ 470 0079 04       		.byte	0x4
+ 471 007a 05       		.byte	0x5
+ 472 007b A2030000 		.4byte	.LASF9
+ 473 007f 02       		.uleb128 0x2
+ 474 0080 49040000 		.4byte	.LASF10
+ 475 0084 02       		.byte	0x2
+ 476 0085 41       		.byte	0x41
+ 477 0086 8A000000 		.4byte	0x8a
+ 478 008a 03       		.uleb128 0x3
+ 479 008b 04       		.byte	0x4
+ 480 008c 07       		.byte	0x7
+ 481 008d 11040000 		.4byte	.LASF11
+ 482 0091 03       		.uleb128 0x3
+ 483 0092 08       		.byte	0x8
+ 484 0093 05       		.byte	0x5
+ 485 0094 EE020000 		.4byte	.LASF12
+ 486 0098 03       		.uleb128 0x3
+ 487 0099 08       		.byte	0x8
+ 488 009a 07       		.byte	0x7
+ 489 009b 13010000 		.4byte	.LASF13
+ 490 009f 04       		.uleb128 0x4
+ 491 00a0 04       		.byte	0x4
+ 492 00a1 05       		.byte	0x5
+ 493 00a2 696E7400 		.ascii	"int\000"
+ 494 00a6 03       		.uleb128 0x3
+ 495 00a7 04       		.byte	0x4
+ 496 00a8 07       		.byte	0x7
+ 497 00a9 50000000 		.4byte	.LASF14
+ 498 00ad 02       		.uleb128 0x2
+ 499 00ae CE000000 		.4byte	.LASF15
+ 500 00b2 03       		.byte	0x3
+ 501 00b3 14       		.byte	0x14
+ 502 00b4 25000000 		.4byte	0x25
+ 503 00b8 02       		.uleb128 0x2
+ 504 00b9 84020000 		.4byte	.LASF16
+ 505 00bd 03       		.byte	0x3
+ 506 00be 18       		.byte	0x18
+ 507 00bf 37000000 		.4byte	0x37
+ 508 00c3 02       		.uleb128 0x2
+ 509 00c4 0B010000 		.4byte	.LASF17
+ 510 00c8 03       		.byte	0x3
+ 511 00c9 20       		.byte	0x20
+ 512 00ca 49000000 		.4byte	0x49
+ 513 00ce 02       		.uleb128 0x2
+ 514 00cf 5A030000 		.4byte	.LASF18
+ 515 00d3 03       		.byte	0x3
+ 516 00d4 24       		.byte	0x24
+ 517 00d5 5B000000 		.4byte	0x5b
+ 518 00d9 02       		.uleb128 0x2
+ 519 00da 23040000 		.4byte	.LASF19
+ 520 00de 03       		.byte	0x3
+ 521 00df 2C       		.byte	0x2c
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 13
+
+
+ 522 00e0 6D000000 		.4byte	0x6d
+ 523 00e4 02       		.uleb128 0x2
+ 524 00e5 C5000000 		.4byte	.LASF20
+ 525 00e9 03       		.byte	0x3
+ 526 00ea 30       		.byte	0x30
+ 527 00eb 7F000000 		.4byte	0x7f
+ 528 00ef 05       		.uleb128 0x5
+ 529 00f0 AB040000 		.4byte	.LASF21
+ 530 00f4 04       		.byte	0x4
+ 531 00f5 E401     		.2byte	0x1e4
+ 532 00f7 42000000 		.4byte	0x42
+ 533 00fb 05       		.uleb128 0x5
+ 534 00fc 6A020000 		.4byte	.LASF22
+ 535 0100 04       		.byte	0x4
+ 536 0101 E501     		.2byte	0x1e5
+ 537 0103 66000000 		.4byte	0x66
+ 538 0107 03       		.uleb128 0x3
+ 539 0108 04       		.byte	0x4
+ 540 0109 04       		.byte	0x4
+ 541 010a E2000000 		.4byte	.LASF23
+ 542 010e 03       		.uleb128 0x3
+ 543 010f 08       		.byte	0x8
+ 544 0110 04       		.byte	0x4
+ 545 0111 B1040000 		.4byte	.LASF24
+ 546 0115 03       		.uleb128 0x3
+ 547 0116 01       		.byte	0x1
+ 548 0117 08       		.byte	0x8
+ 549 0118 3A020000 		.4byte	.LASF25
+ 550 011c 03       		.uleb128 0x3
+ 551 011d 08       		.byte	0x8
+ 552 011e 04       		.byte	0x4
+ 553 011f 4E030000 		.4byte	.LASF26
+ 554 0123 03       		.uleb128 0x3
+ 555 0124 04       		.byte	0x4
+ 556 0125 07       		.byte	0x7
+ 557 0126 08040000 		.4byte	.LASF27
+ 558 012a 06       		.uleb128 0x6
+ 559 012b 04       		.byte	0x4
+ 560 012c 07       		.uleb128 0x7
+ 561 012d 04       		.byte	0x4
+ 562 012e 15010000 		.4byte	0x115
+ 563 0132 07       		.uleb128 0x7
+ 564 0133 04       		.byte	0x4
+ 565 0134 42000000 		.4byte	0x42
+ 566 0138 02       		.uleb128 0x2
+ 567 0139 38030000 		.4byte	.LASF28
+ 568 013d 05       		.byte	0x5
+ 569 013e 26       		.byte	0x26
+ 570 013f B8000000 		.4byte	0xb8
+ 571 0143 02       		.uleb128 0x2
+ 572 0144 99020000 		.4byte	.LASF29
+ 573 0148 05       		.byte	0x5
+ 574 0149 27       		.byte	0x27
+ 575 014a AD000000 		.4byte	0xad
+ 576 014e 02       		.uleb128 0x2
+ 577 014f 49000000 		.4byte	.LASF30
+ 578 0153 05       		.byte	0x5
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 14
+
+
+ 579 0154 28       		.byte	0x28
+ 580 0155 CE000000 		.4byte	0xce
+ 581 0159 02       		.uleb128 0x2
+ 582 015a 54010000 		.4byte	.LASF31
+ 583 015e 05       		.byte	0x5
+ 584 015f 29       		.byte	0x29
+ 585 0160 C3000000 		.4byte	0xc3
+ 586 0164 02       		.uleb128 0x2
+ 587 0165 D5000000 		.4byte	.LASF32
+ 588 0169 05       		.byte	0x5
+ 589 016a 2A       		.byte	0x2a
+ 590 016b E4000000 		.4byte	0xe4
+ 591 016f 08       		.uleb128 0x8
+ 592 0170 01       		.byte	0x1
+ 593 0171 42000000 		.4byte	0x42
+ 594 0175 06       		.byte	0x6
+ 595 0176 1E       		.byte	0x1e
+ 596 0177 88010000 		.4byte	0x188
+ 597 017b 09       		.uleb128 0x9
+ 598 017c CD040000 		.4byte	.LASF33
+ 599 0180 00       		.byte	0
+ 600 0181 09       		.uleb128 0x9
+ 601 0182 08000000 		.4byte	.LASF34
+ 602 0186 01       		.byte	0x1
+ 603 0187 00       		.byte	0
+ 604 0188 02       		.uleb128 0x2
+ 605 0189 A2000000 		.4byte	.LASF35
+ 606 018d 06       		.byte	0x6
+ 607 018e 21       		.byte	0x21
+ 608 018f 6F010000 		.4byte	0x16f
+ 609 0193 0A       		.uleb128 0xa
+ 610 0194 14       		.byte	0x14
+ 611 0195 06       		.byte	0x6
+ 612 0196 23       		.byte	0x23
+ 613 0197 EE010000 		.4byte	0x1ee
+ 614 019b 0B       		.uleb128 0xb
+ 615 019c 7000     		.ascii	"p\000"
+ 616 019e 06       		.byte	0x6
+ 617 019f 25       		.byte	0x25
+ 618 01a0 32010000 		.4byte	0x132
+ 619 01a4 00       		.byte	0
+ 620 01a5 0C       		.uleb128 0xc
+ 621 01a6 4D020000 		.4byte	.LASF36
+ 622 01aa 06       		.byte	0x6
+ 623 01ab 26       		.byte	0x26
+ 624 01ac 88010000 		.4byte	0x188
+ 625 01b0 04       		.byte	0x4
+ 626 01b1 0C       		.uleb128 0xc
+ 627 01b2 0A020000 		.4byte	.LASF37
+ 628 01b6 06       		.byte	0x6
+ 629 01b7 27       		.byte	0x27
+ 630 01b8 59010000 		.4byte	0x159
+ 631 01bc 06       		.byte	0x6
+ 632 01bd 0C       		.uleb128 0xc
+ 633 01be 8C030000 		.4byte	.LASF38
+ 634 01c2 06       		.byte	0x6
+ 635 01c3 28       		.byte	0x28
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 15
+
+
+ 636 01c4 59010000 		.4byte	0x159
+ 637 01c8 08       		.byte	0x8
+ 638 01c9 0C       		.uleb128 0xc
+ 639 01ca 23030000 		.4byte	.LASF39
+ 640 01ce 06       		.byte	0x6
+ 641 01cf 29       		.byte	0x29
+ 642 01d0 4E010000 		.4byte	0x14e
+ 643 01d4 0A       		.byte	0xa
+ 644 01d5 0C       		.uleb128 0xc
+ 645 01d6 DC030000 		.4byte	.LASF40
+ 646 01da 06       		.byte	0x6
+ 647 01db 2A       		.byte	0x2a
+ 648 01dc 4E010000 		.4byte	0x14e
+ 649 01e0 0C       		.byte	0xc
+ 650 01e1 0C       		.uleb128 0xc
+ 651 01e2 47030000 		.4byte	.LASF41
+ 652 01e6 06       		.byte	0x6
+ 653 01e7 2B       		.byte	0x2b
+ 654 01e8 EE010000 		.4byte	0x1ee
+ 655 01ec 10       		.byte	0x10
+ 656 01ed 00       		.byte	0
+ 657 01ee 07       		.uleb128 0x7
+ 658 01ef 04       		.byte	0x4
+ 659 01f0 38010000 		.4byte	0x138
+ 660 01f4 02       		.uleb128 0x2
+ 661 01f5 E5030000 		.4byte	.LASF42
+ 662 01f9 06       		.byte	0x6
+ 663 01fa 2C       		.byte	0x2c
+ 664 01fb 93010000 		.4byte	0x193
+ 665 01ff 02       		.uleb128 0x2
+ 666 0200 06030000 		.4byte	.LASF43
+ 667 0204 06       		.byte	0x6
+ 668 0205 65       		.byte	0x65
+ 669 0206 0A020000 		.4byte	0x20a
+ 670 020a 0D       		.uleb128 0xd
+ 671 020b B8040000 		.4byte	.LASF53
+ 672 020f 20       		.byte	0x20
+ 673 0210 06       		.byte	0x6
+ 674 0211 F6       		.byte	0xf6
+ 675 0212 83020000 		.4byte	0x283
+ 676 0216 0C       		.uleb128 0xc
+ 677 0217 70040000 		.4byte	.LASF44
+ 678 021b 06       		.byte	0x6
+ 679 021c F8       		.byte	0xf8
+ 680 021d 38010000 		.4byte	0x138
+ 681 0221 00       		.byte	0
+ 682 0222 0C       		.uleb128 0xc
+ 683 0223 34000000 		.4byte	.LASF45
+ 684 0227 06       		.byte	0x6
+ 685 0228 F9       		.byte	0xf9
+ 686 0229 38010000 		.4byte	0x138
+ 687 022d 01       		.byte	0x1
+ 688 022e 0C       		.uleb128 0xc
+ 689 022f 95000000 		.4byte	.LASF46
+ 690 0233 06       		.byte	0x6
+ 691 0234 FA       		.byte	0xfa
+ 692 0235 28040000 		.4byte	0x428
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 16
+
+
+ 693 0239 04       		.byte	0x4
+ 694 023a 0C       		.uleb128 0xc
+ 695 023b C7040000 		.4byte	.LASF47
+ 696 023f 06       		.byte	0x6
+ 697 0240 FB       		.byte	0xfb
+ 698 0241 71030000 		.4byte	0x371
+ 699 0245 08       		.byte	0x8
+ 700 0246 0C       		.uleb128 0xc
+ 701 0247 7D040000 		.4byte	.LASF48
+ 702 024b 06       		.byte	0x6
+ 703 024c FC       		.byte	0xfc
+ 704 024d 71030000 		.4byte	0x371
+ 705 0251 10       		.byte	0x10
+ 706 0252 0C       		.uleb128 0xc
+ 707 0253 36040000 		.4byte	.LASF49
+ 708 0257 06       		.byte	0x6
+ 709 0258 FD       		.byte	0xfd
+ 710 0259 38010000 		.4byte	0x138
+ 711 025d 18       		.byte	0x18
+ 712 025e 0B       		.uleb128 0xb
+ 713 025f 696400   		.ascii	"id\000"
+ 714 0262 06       		.byte	0x6
+ 715 0263 FE       		.byte	0xfe
+ 716 0264 38010000 		.4byte	0x138
+ 717 0268 19       		.byte	0x19
+ 718 0269 0C       		.uleb128 0xc
+ 719 026a E8000000 		.4byte	.LASF50
+ 720 026e 06       		.byte	0x6
+ 721 026f FF       		.byte	0xff
+ 722 0270 38010000 		.4byte	0x138
+ 723 0274 1A       		.byte	0x1a
+ 724 0275 0E       		.uleb128 0xe
+ 725 0276 71020000 		.4byte	.LASF51
+ 726 027a 06       		.byte	0x6
+ 727 027b 0001     		.2byte	0x100
+ 728 027d 2A010000 		.4byte	0x12a
+ 729 0281 1C       		.byte	0x1c
+ 730 0282 00       		.byte	0
+ 731 0283 02       		.uleb128 0x2
+ 732 0284 AB030000 		.4byte	.LASF52
+ 733 0288 06       		.byte	0x6
+ 734 0289 66       		.byte	0x66
+ 735 028a 8E020000 		.4byte	0x28e
+ 736 028e 0F       		.uleb128 0xf
+ 737 028f 8C000000 		.4byte	.LASF54
+ 738 0293 44       		.byte	0x44
+ 739 0294 06       		.byte	0x6
+ 740 0295 4001     		.2byte	0x140
+ 741 0297 31030000 		.4byte	0x331
+ 742 029b 0E       		.uleb128 0xe
+ 743 029c 4D010000 		.4byte	.LASF55
+ 744 02a0 06       		.byte	0x6
+ 745 02a1 4201     		.2byte	0x142
+ 746 02a3 38010000 		.4byte	0x138
+ 747 02a7 00       		.byte	0
+ 748 02a8 0E       		.uleb128 0xe
+ 749 02a9 AC000000 		.4byte	.LASF56
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 17
+
+
+ 750 02ad 06       		.byte	0x6
+ 751 02ae 4301     		.2byte	0x143
+ 752 02b0 22040000 		.4byte	0x422
+ 753 02b4 04       		.byte	0x4
+ 754 02b5 0E       		.uleb128 0xe
+ 755 02b6 70040000 		.4byte	.LASF44
+ 756 02ba 06       		.byte	0x6
+ 757 02bb 4401     		.2byte	0x144
+ 758 02bd 38010000 		.4byte	0x138
+ 759 02c1 08       		.byte	0x8
+ 760 02c2 10       		.uleb128 0x10
+ 761 02c3 666300   		.ascii	"fc\000"
+ 762 02c6 06       		.byte	0x6
+ 763 02c7 4501     		.2byte	0x145
+ 764 02c9 31030000 		.4byte	0x331
+ 765 02cd 0C       		.byte	0xc
+ 766 02ce 10       		.uleb128 0x10
+ 767 02cf 626300   		.ascii	"bc\000"
+ 768 02d2 06       		.byte	0x6
+ 769 02d3 4601     		.2byte	0x146
+ 770 02d5 31030000 		.4byte	0x331
+ 771 02d9 10       		.byte	0x10
+ 772 02da 10       		.uleb128 0x10
+ 773 02db 787300   		.ascii	"xs\000"
+ 774 02de 06       		.byte	0x6
+ 775 02df 4701     		.2byte	0x147
+ 776 02e1 59010000 		.4byte	0x159
+ 777 02e5 14       		.byte	0x14
+ 778 02e6 10       		.uleb128 0x10
+ 779 02e7 797300   		.ascii	"ys\000"
+ 780 02ea 06       		.byte	0x6
+ 781 02eb 4801     		.2byte	0x148
+ 782 02ed 59010000 		.4byte	0x159
+ 783 02f1 16       		.byte	0x16
+ 784 02f2 10       		.uleb128 0x10
+ 785 02f3 786500   		.ascii	"xe\000"
+ 786 02f6 06       		.byte	0x6
+ 787 02f7 4901     		.2byte	0x149
+ 788 02f9 59010000 		.4byte	0x159
+ 789 02fd 18       		.byte	0x18
+ 790 02fe 10       		.uleb128 0x10
+ 791 02ff 796500   		.ascii	"ye\000"
+ 792 0302 06       		.byte	0x6
+ 793 0303 4A01     		.2byte	0x14a
+ 794 0305 59010000 		.4byte	0x159
+ 795 0309 1A       		.byte	0x1a
+ 796 030a 0E       		.uleb128 0xe
+ 797 030b 6A040000 		.4byte	.LASF57
+ 798 030f 06       		.byte	0x6
+ 799 0310 4B01     		.2byte	0x14b
+ 800 0312 38010000 		.4byte	0x138
+ 801 0316 1C       		.byte	0x1c
+ 802 0317 0E       		.uleb128 0xe
+ 803 0318 BF000000 		.4byte	.LASF58
+ 804 031c 06       		.byte	0x6
+ 805 031d 4C01     		.2byte	0x14c
+ 806 031f B8040000 		.4byte	0x4b8
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 18
+
+
+ 807 0323 20       		.byte	0x20
+ 808 0324 10       		.uleb128 0x10
+ 809 0325 636200   		.ascii	"cb\000"
+ 810 0328 06       		.byte	0x6
+ 811 0329 4D01     		.2byte	0x14d
+ 812 032b D5040000 		.4byte	0x4d5
+ 813 032f 40       		.byte	0x40
+ 814 0330 00       		.byte	0
+ 815 0331 02       		.uleb128 0x2
+ 816 0332 40000000 		.4byte	.LASF59
+ 817 0336 06       		.byte	0x6
+ 818 0337 69       		.byte	0x69
+ 819 0338 64010000 		.4byte	0x164
+ 820 033c 0A       		.uleb128 0xa
+ 821 033d 08       		.byte	0x8
+ 822 033e 06       		.byte	0x6
+ 823 033f A6       		.byte	0xa6
+ 824 0340 71030000 		.4byte	0x371
+ 825 0344 0B       		.uleb128 0xb
+ 826 0345 787300   		.ascii	"xs\000"
+ 827 0348 06       		.byte	0x6
+ 828 0349 A8       		.byte	0xa8
+ 829 034a 59010000 		.4byte	0x159
+ 830 034e 00       		.byte	0
+ 831 034f 0B       		.uleb128 0xb
+ 832 0350 797300   		.ascii	"ys\000"
+ 833 0353 06       		.byte	0x6
+ 834 0354 A9       		.byte	0xa9
+ 835 0355 59010000 		.4byte	0x159
+ 836 0359 02       		.byte	0x2
+ 837 035a 0B       		.uleb128 0xb
+ 838 035b 786500   		.ascii	"xe\000"
+ 839 035e 06       		.byte	0x6
+ 840 035f AA       		.byte	0xaa
+ 841 0360 59010000 		.4byte	0x159
+ 842 0364 04       		.byte	0x4
+ 843 0365 0B       		.uleb128 0xb
+ 844 0366 796500   		.ascii	"ye\000"
+ 845 0369 06       		.byte	0x6
+ 846 036a AB       		.byte	0xab
+ 847 036b 59010000 		.4byte	0x159
+ 848 036f 06       		.byte	0x6
+ 849 0370 00       		.byte	0
+ 850 0371 02       		.uleb128 0x2
+ 851 0372 57020000 		.4byte	.LASF60
+ 852 0376 06       		.byte	0x6
+ 853 0377 AC       		.byte	0xac
+ 854 0378 3C030000 		.4byte	0x33c
+ 855 037c 07       		.uleb128 0x7
+ 856 037d 04       		.byte	0x4
+ 857 037e 82030000 		.4byte	0x382
+ 858 0382 11       		.uleb128 0x11
+ 859 0383 F4010000 		.4byte	0x1f4
+ 860 0387 0A       		.uleb128 0xa
+ 861 0388 08       		.byte	0x8
+ 862 0389 06       		.byte	0x6
+ 863 038a D5       		.byte	0xd5
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 19
+
+
+ 864 038b CB030000 		.4byte	0x3cb
+ 865 038f 0C       		.uleb128 0xc
+ 866 0390 36040000 		.4byte	.LASF49
+ 867 0394 06       		.byte	0x6
+ 868 0395 D7       		.byte	0xd7
+ 869 0396 38010000 		.4byte	0x138
+ 870 039a 00       		.byte	0
+ 871 039b 0B       		.uleb128 0xb
+ 872 039c 696400   		.ascii	"id\000"
+ 873 039f 06       		.byte	0x6
+ 874 03a0 D8       		.byte	0xd8
+ 875 03a1 38010000 		.4byte	0x138
+ 876 03a5 01       		.byte	0x1
+ 877 03a6 0C       		.uleb128 0xc
+ 878 03a7 15030000 		.4byte	.LASF61
+ 879 03ab 06       		.byte	0x6
+ 880 03ac D9       		.byte	0xd9
+ 881 03ad 38010000 		.4byte	0x138
+ 882 03b1 02       		.byte	0x2
+ 883 03b2 0C       		.uleb128 0xc
+ 884 03b3 E8000000 		.4byte	.LASF50
+ 885 03b7 06       		.byte	0x6
+ 886 03b8 DA       		.byte	0xda
+ 887 03b9 38010000 		.4byte	0x138
+ 888 03bd 03       		.byte	0x3
+ 889 03be 0B       		.uleb128 0xb
+ 890 03bf 73726300 		.ascii	"src\000"
+ 891 03c3 06       		.byte	0x6
+ 892 03c4 DB       		.byte	0xdb
+ 893 03c5 2A010000 		.4byte	0x12a
+ 894 03c9 04       		.byte	0x4
+ 895 03ca 00       		.byte	0
+ 896 03cb 02       		.uleb128 0x2
+ 897 03cc 5F020000 		.4byte	.LASF62
+ 898 03d0 06       		.byte	0x6
+ 899 03d1 DC       		.byte	0xdc
+ 900 03d2 87030000 		.4byte	0x387
+ 901 03d6 0A       		.uleb128 0xa
+ 902 03d7 06       		.byte	0x6
+ 903 03d8 06       		.byte	0x6
+ 904 03d9 E7       		.byte	0xe7
+ 905 03da 01040000 		.4byte	0x401
+ 906 03de 0C       		.uleb128 0xc
+ 907 03df 70040000 		.4byte	.LASF44
+ 908 03e3 06       		.byte	0x6
+ 909 03e4 E9       		.byte	0xe9
+ 910 03e5 38010000 		.4byte	0x138
+ 911 03e9 00       		.byte	0
+ 912 03ea 0B       		.uleb128 0xb
+ 913 03eb 787000   		.ascii	"xp\000"
+ 914 03ee 06       		.byte	0x6
+ 915 03ef EA       		.byte	0xea
+ 916 03f0 59010000 		.4byte	0x159
+ 917 03f4 02       		.byte	0x2
+ 918 03f5 0B       		.uleb128 0xb
+ 919 03f6 797000   		.ascii	"yp\000"
+ 920 03f9 06       		.byte	0x6
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 20
+
+
+ 921 03fa EB       		.byte	0xeb
+ 922 03fb 59010000 		.4byte	0x159
+ 923 03ff 04       		.byte	0x4
+ 924 0400 00       		.byte	0
+ 925 0401 02       		.uleb128 0x2
+ 926 0402 83040000 		.4byte	.LASF63
+ 927 0406 06       		.byte	0x6
+ 928 0407 EC       		.byte	0xec
+ 929 0408 D6030000 		.4byte	0x3d6
+ 930 040c 12       		.uleb128 0x12
+ 931 040d 1C040000 		.4byte	0x41c
+ 932 0411 13       		.uleb128 0x13
+ 933 0412 1C040000 		.4byte	0x41c
+ 934 0416 13       		.uleb128 0x13
+ 935 0417 22040000 		.4byte	0x422
+ 936 041b 00       		.byte	0
+ 937 041c 07       		.uleb128 0x7
+ 938 041d 04       		.byte	0x4
+ 939 041e 83020000 		.4byte	0x283
+ 940 0422 07       		.uleb128 0x7
+ 941 0423 04       		.byte	0x4
+ 942 0424 FF010000 		.4byte	0x1ff
+ 943 0428 07       		.uleb128 0x7
+ 944 0429 04       		.byte	0x4
+ 945 042a 0C040000 		.4byte	0x40c
+ 946 042e 14       		.uleb128 0x14
+ 947 042f 20       		.byte	0x20
+ 948 0430 06       		.byte	0x6
+ 949 0431 3101     		.2byte	0x131
+ 950 0433 B8040000 		.4byte	0x4b8
+ 951 0437 10       		.uleb128 0x10
+ 952 0438 73747200 		.ascii	"str\000"
+ 953 043c 06       		.byte	0x6
+ 954 043d 3301     		.2byte	0x133
+ 955 043f 2C010000 		.4byte	0x12c
+ 956 0443 00       		.byte	0
+ 957 0444 0E       		.uleb128 0xe
+ 958 0445 03040000 		.4byte	.LASF64
+ 959 0449 06       		.byte	0x6
+ 960 044a 3401     		.2byte	0x134
+ 961 044c 7C030000 		.4byte	0x37c
+ 962 0450 04       		.byte	0x4
+ 963 0451 0E       		.uleb128 0xe
+ 964 0452 54040000 		.4byte	.LASF65
+ 965 0456 06       		.byte	0x6
+ 966 0457 3501     		.2byte	0x135
+ 967 0459 43010000 		.4byte	0x143
+ 968 045d 08       		.byte	0x8
+ 969 045e 0E       		.uleb128 0xe
+ 970 045f 32020000 		.4byte	.LASF66
+ 971 0463 06       		.byte	0x6
+ 972 0464 3601     		.2byte	0x136
+ 973 0466 43010000 		.4byte	0x143
+ 974 046a 09       		.byte	0x9
+ 975 046b 0E       		.uleb128 0xe
+ 976 046c C1040000 		.4byte	.LASF67
+ 977 0470 06       		.byte	0x6
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 21
+
+
+ 978 0471 3701     		.2byte	0x137
+ 979 0473 38010000 		.4byte	0x138
+ 980 0477 0A       		.byte	0xa
+ 981 0478 10       		.uleb128 0x10
+ 982 0479 666300   		.ascii	"fc\000"
+ 983 047c 06       		.byte	0x6
+ 984 047d 3801     		.2byte	0x138
+ 985 047f 31030000 		.4byte	0x331
+ 986 0483 0C       		.byte	0xc
+ 987 0484 10       		.uleb128 0x10
+ 988 0485 626300   		.ascii	"bc\000"
+ 989 0488 06       		.byte	0x6
+ 990 0489 3901     		.2byte	0x139
+ 991 048b 31030000 		.4byte	0x331
+ 992 048f 10       		.byte	0x10
+ 993 0490 10       		.uleb128 0x10
+ 994 0491 69666300 		.ascii	"ifc\000"
+ 995 0495 06       		.byte	0x6
+ 996 0496 3A01     		.2byte	0x13a
+ 997 0498 31030000 		.4byte	0x331
+ 998 049c 14       		.byte	0x14
+ 999 049d 10       		.uleb128 0x10
+ 1000 049e 69626300 		.ascii	"ibc\000"
+ 1001 04a2 06       		.byte	0x6
+ 1002 04a3 3B01     		.2byte	0x13b
+ 1003 04a5 31030000 		.4byte	0x331
+ 1004 04a9 18       		.byte	0x18
+ 1005 04aa 0E       		.uleb128 0xe
+ 1006 04ab 1C030000 		.4byte	.LASF68
+ 1007 04af 06       		.byte	0x6
+ 1008 04b0 3C01     		.2byte	0x13c
+ 1009 04b2 38010000 		.4byte	0x138
+ 1010 04b6 1C       		.byte	0x1c
+ 1011 04b7 00       		.byte	0
+ 1012 04b8 05       		.uleb128 0x5
+ 1013 04b9 6B030000 		.4byte	.LASF69
+ 1014 04bd 06       		.byte	0x6
+ 1015 04be 3D01     		.2byte	0x13d
+ 1016 04c0 2E040000 		.4byte	0x42e
+ 1017 04c4 12       		.uleb128 0x12
+ 1018 04c5 CF040000 		.4byte	0x4cf
+ 1019 04c9 13       		.uleb128 0x13
+ 1020 04ca CF040000 		.4byte	0x4cf
+ 1021 04ce 00       		.byte	0
+ 1022 04cf 07       		.uleb128 0x7
+ 1023 04d0 04       		.byte	0x4
+ 1024 04d1 CB030000 		.4byte	0x3cb
+ 1025 04d5 07       		.uleb128 0x7
+ 1026 04d6 04       		.byte	0x4
+ 1027 04d7 C4040000 		.4byte	0x4c4
+ 1028 04db 14       		.uleb128 0x14
+ 1029 04dc 08       		.byte	0x8
+ 1030 04dd 06       		.byte	0x6
+ 1031 04de 1F02     		.2byte	0x21f
+ 1032 04e0 FF040000 		.4byte	0x4ff
+ 1033 04e4 0E       		.uleb128 0xe
+ 1034 04e5 92020000 		.4byte	.LASF70
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 22
+
+
+ 1035 04e9 06       		.byte	0x6
+ 1036 04ea 2102     		.2byte	0x221
+ 1037 04ec 2A010000 		.4byte	0x12a
+ 1038 04f0 00       		.byte	0
+ 1039 04f1 0E       		.uleb128 0xe
+ 1040 04f2 70040000 		.4byte	.LASF44
+ 1041 04f6 06       		.byte	0x6
+ 1042 04f7 2202     		.2byte	0x222
+ 1043 04f9 38010000 		.4byte	0x138
+ 1044 04fd 04       		.byte	0x4
+ 1045 04fe 00       		.byte	0
+ 1046 04ff 05       		.uleb128 0x5
+ 1047 0500 7C030000 		.4byte	.LASF71
+ 1048 0504 06       		.byte	0x6
+ 1049 0505 2302     		.2byte	0x223
+ 1050 0507 DB040000 		.4byte	0x4db
+ 1051 050b 14       		.uleb128 0x14
+ 1052 050c 14       		.byte	0x14
+ 1053 050d 06       		.byte	0x6
+ 1054 050e 3B02     		.2byte	0x23b
+ 1055 0510 7D050000 		.4byte	0x57d
+ 1056 0514 0E       		.uleb128 0xe
+ 1057 0515 86030000 		.4byte	.LASF72
+ 1058 0519 06       		.byte	0x6
+ 1059 051a 3D02     		.2byte	0x23d
+ 1060 051c 59010000 		.4byte	0x159
+ 1061 0520 00       		.byte	0
+ 1062 0521 0E       		.uleb128 0xe
+ 1063 0522 66010000 		.4byte	.LASF73
+ 1064 0526 06       		.byte	0x6
+ 1065 0527 3E02     		.2byte	0x23e
+ 1066 0529 59010000 		.4byte	0x159
+ 1067 052d 02       		.byte	0x2
+ 1068 052e 0E       		.uleb128 0xe
+ 1069 052f 5C040000 		.4byte	.LASF74
+ 1070 0533 06       		.byte	0x6
+ 1071 0534 3F02     		.2byte	0x23f
+ 1072 0536 59010000 		.4byte	0x159
+ 1073 053a 04       		.byte	0x4
+ 1074 053b 0E       		.uleb128 0xe
+ 1075 053c 2A020000 		.4byte	.LASF75
+ 1076 0540 06       		.byte	0x6
+ 1077 0541 4002     		.2byte	0x240
+ 1078 0543 59010000 		.4byte	0x159
+ 1079 0547 06       		.byte	0x6
+ 1080 0548 0E       		.uleb128 0xe
+ 1081 0549 DC000000 		.4byte	.LASF76
+ 1082 054d 06       		.byte	0x6
+ 1083 054e 4102     		.2byte	0x241
+ 1084 0550 59010000 		.4byte	0x159
+ 1085 0554 08       		.byte	0x8
+ 1086 0555 0E       		.uleb128 0xe
+ 1087 0556 64040000 		.4byte	.LASF77
+ 1088 055a 06       		.byte	0x6
+ 1089 055b 4202     		.2byte	0x242
+ 1090 055d 59010000 		.4byte	0x159
+ 1091 0561 0A       		.byte	0xa
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 23
+
+
+ 1092 0562 0E       		.uleb128 0xe
+ 1093 0563 5B010000 		.4byte	.LASF78
+ 1094 0567 06       		.byte	0x6
+ 1095 0568 4302     		.2byte	0x243
+ 1096 056a 31030000 		.4byte	0x331
+ 1097 056e 0C       		.byte	0xc
+ 1098 056f 0E       		.uleb128 0xe
+ 1099 0570 FA000000 		.4byte	.LASF79
+ 1100 0574 06       		.byte	0x6
+ 1101 0575 4402     		.2byte	0x244
+ 1102 0577 31030000 		.4byte	0x331
+ 1103 057b 10       		.byte	0x10
+ 1104 057c 00       		.byte	0
+ 1105 057d 14       		.uleb128 0x14
+ 1106 057e 78       		.byte	0x78
+ 1107 057f 06       		.byte	0x6
+ 1108 0580 3202     		.2byte	0x232
+ 1109 0582 57060000 		.4byte	0x657
+ 1110 0586 0E       		.uleb128 0xe
+ 1111 0587 10030000 		.4byte	.LASF80
+ 1112 058b 06       		.byte	0x6
+ 1113 058c 3402     		.2byte	0x234
+ 1114 058e 6C060000 		.4byte	0x66c
+ 1115 0592 00       		.byte	0
+ 1116 0593 0E       		.uleb128 0xe
+ 1117 0594 E8020000 		.4byte	.LASF81
+ 1118 0598 06       		.byte	0x6
+ 1119 0599 3502     		.2byte	0x235
+ 1120 059b 59010000 		.4byte	0x159
+ 1121 059f 04       		.byte	0x4
+ 1122 05a0 0E       		.uleb128 0xe
+ 1123 05a1 9C000000 		.4byte	.LASF82
+ 1124 05a5 06       		.byte	0x6
+ 1125 05a6 3602     		.2byte	0x236
+ 1126 05a8 59010000 		.4byte	0x159
+ 1127 05ac 06       		.byte	0x6
+ 1128 05ad 0E       		.uleb128 0xe
+ 1129 05ae 8C020000 		.4byte	.LASF83
+ 1130 05b2 06       		.byte	0x6
+ 1131 05b3 3702     		.2byte	0x237
+ 1132 05b5 01040000 		.4byte	0x401
+ 1133 05b9 08       		.byte	0x8
+ 1134 05ba 0E       		.uleb128 0xe
+ 1135 05bb B3000000 		.4byte	.LASF84
+ 1136 05bf 06       		.byte	0x6
+ 1137 05c0 3802     		.2byte	0x238
+ 1138 05c2 1C040000 		.4byte	0x41c
+ 1139 05c6 10       		.byte	0x10
+ 1140 05c7 0E       		.uleb128 0xe
+ 1141 05c8 3F010000 		.4byte	.LASF85
+ 1142 05cc 06       		.byte	0x6
+ 1143 05cd 3902     		.2byte	0x239
+ 1144 05cf 1C040000 		.4byte	0x41c
+ 1145 05d3 14       		.byte	0x14
+ 1146 05d4 0E       		.uleb128 0xe
+ 1147 05d5 EE000000 		.4byte	.LASF86
+ 1148 05d9 06       		.byte	0x6
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 24
+
+
+ 1149 05da 3A02     		.2byte	0x23a
+ 1150 05dc 1C040000 		.4byte	0x41c
+ 1151 05e0 18       		.byte	0x18
+ 1152 05e1 0E       		.uleb128 0xe
+ 1153 05e2 84000000 		.4byte	.LASF87
+ 1154 05e6 06       		.byte	0x6
+ 1155 05e7 4502     		.2byte	0x245
+ 1156 05e9 0B050000 		.4byte	0x50b
+ 1157 05ed 1C       		.byte	0x1c
+ 1158 05ee 0E       		.uleb128 0xe
+ 1159 05ef 03040000 		.4byte	.LASF64
+ 1160 05f3 06       		.byte	0x6
+ 1161 05f4 4602     		.2byte	0x246
+ 1162 05f6 F4010000 		.4byte	0x1f4
+ 1163 05fa 30       		.byte	0x30
+ 1164 05fb 0E       		.uleb128 0xe
+ 1165 05fc DC040000 		.4byte	.LASF88
+ 1166 0600 06       		.byte	0x6
+ 1167 0601 4702     		.2byte	0x247
+ 1168 0603 43010000 		.4byte	0x143
+ 1169 0607 44       		.byte	0x44
+ 1170 0608 0E       		.uleb128 0xe
+ 1171 0609 5D000000 		.4byte	.LASF89
+ 1172 060d 06       		.byte	0x6
+ 1173 060e 4802     		.2byte	0x248
+ 1174 0610 43010000 		.4byte	0x143
+ 1175 0614 45       		.byte	0x45
+ 1176 0615 0E       		.uleb128 0xe
+ 1177 0616 5B010000 		.4byte	.LASF78
+ 1178 061a 06       		.byte	0x6
+ 1179 061b 4902     		.2byte	0x249
+ 1180 061d 31030000 		.4byte	0x331
+ 1181 0621 48       		.byte	0x48
+ 1182 0622 0E       		.uleb128 0xe
+ 1183 0623 FA000000 		.4byte	.LASF79
+ 1184 0627 06       		.byte	0x6
+ 1185 0628 4A02     		.2byte	0x24a
+ 1186 062a 31030000 		.4byte	0x331
+ 1187 062e 4C       		.byte	0x4c
+ 1188 062f 0E       		.uleb128 0xe
+ 1189 0630 17000000 		.4byte	.LASF90
+ 1190 0634 06       		.byte	0x6
+ 1191 0635 4B02     		.2byte	0x24b
+ 1192 0637 31030000 		.4byte	0x331
+ 1193 063b 50       		.byte	0x50
+ 1194 063c 0E       		.uleb128 0xe
+ 1195 063d 70040000 		.4byte	.LASF44
+ 1196 0641 06       		.byte	0x6
+ 1197 0642 4C02     		.2byte	0x24c
+ 1198 0644 38010000 		.4byte	0x138
+ 1199 0648 54       		.byte	0x54
+ 1200 0649 0E       		.uleb128 0xe
+ 1201 064a 92020000 		.4byte	.LASF70
+ 1202 064e 06       		.byte	0x6
+ 1203 064f 4D02     		.2byte	0x24d
+ 1204 0651 72060000 		.4byte	0x672
+ 1205 0655 58       		.byte	0x58
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 25
+
+
+ 1206 0656 00       		.byte	0
+ 1207 0657 12       		.uleb128 0x12
+ 1208 0658 6C060000 		.4byte	0x66c
+ 1209 065c 13       		.uleb128 0x13
+ 1210 065d 59010000 		.4byte	0x159
+ 1211 0661 13       		.uleb128 0x13
+ 1212 0662 59010000 		.4byte	0x159
+ 1213 0666 13       		.uleb128 0x13
+ 1214 0667 31030000 		.4byte	0x331
+ 1215 066b 00       		.byte	0
+ 1216 066c 07       		.uleb128 0x7
+ 1217 066d 04       		.byte	0x4
+ 1218 066e 57060000 		.4byte	0x657
+ 1219 0672 15       		.uleb128 0x15
+ 1220 0673 FF040000 		.4byte	0x4ff
+ 1221 0677 82060000 		.4byte	0x682
+ 1222 067b 16       		.uleb128 0x16
+ 1223 067c 23010000 		.4byte	0x123
+ 1224 0680 03       		.byte	0x3
+ 1225 0681 00       		.byte	0
+ 1226 0682 05       		.uleb128 0x5
+ 1227 0683 76040000 		.4byte	.LASF91
+ 1228 0687 06       		.byte	0x6
+ 1229 0688 4E02     		.2byte	0x24e
+ 1230 068a 7D050000 		.4byte	0x57d
+ 1231 068e 17       		.uleb128 0x17
+ 1232 068f 2E030000 		.4byte	.LASF93
+ 1233 0693 01       		.byte	0x1
+ 1234 0694 32       		.byte	0x32
+ 1235 0695 FB000000 		.4byte	0xfb
+ 1236 0699 03       		.byte	0x3
+ 1237 069a B5060000 		.4byte	0x6b5
+ 1238 069e 18       		.uleb128 0x18
+ 1239 069f 05010000 		.4byte	.LASF92
+ 1240 06a3 01       		.byte	0x1
+ 1241 06a4 34       		.byte	0x34
+ 1242 06a5 EF000000 		.4byte	0xef
+ 1243 06a9 19       		.uleb128 0x19
+ 1244 06aa 4E756D00 		.ascii	"Num\000"
+ 1245 06ae 01       		.byte	0x1
+ 1246 06af 35       		.byte	0x35
+ 1247 06b0 FB000000 		.4byte	0xfb
+ 1248 06b4 00       		.byte	0
+ 1249 06b5 1A       		.uleb128 0x1a
+ 1250 06b6 2B040000 		.4byte	.LASF94
+ 1251 06ba 01       		.byte	0x1
+ 1252 06bb 1E       		.byte	0x1e
+ 1253 06bc 03       		.byte	0x3
+ 1254 06bd D8060000 		.4byte	0x6d8
+ 1255 06c1 1B       		.uleb128 0x1b
+ 1256 06c2 4E756D00 		.ascii	"Num\000"
+ 1257 06c6 01       		.byte	0x1
+ 1258 06c7 1E       		.byte	0x1e
+ 1259 06c8 42000000 		.4byte	0x42
+ 1260 06cc 18       		.uleb128 0x18
+ 1261 06cd 05010000 		.4byte	.LASF92
+ 1262 06d1 01       		.byte	0x1
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 26
+
+
+ 1263 06d2 20       		.byte	0x20
+ 1264 06d3 42000000 		.4byte	0x42
+ 1265 06d7 00       		.byte	0
+ 1266 06d8 1C       		.uleb128 0x1c
+ 1267 06d9 FA010000 		.4byte	.LASF95
+ 1268 06dd 01       		.byte	0x1
+ 1269 06de 47       		.byte	0x47
+ 1270 06df FB000000 		.4byte	0xfb
+ 1271 06e3 00000000 		.4byte	.LFB65
+ 1272 06e7 A2000000 		.4byte	.LFE65-.LFB65
+ 1273 06eb 01       		.uleb128 0x1
+ 1274 06ec 9C       		.byte	0x9c
+ 1275 06ed B2080000 		.4byte	0x8b2
+ 1276 06f1 1D       		.uleb128 0x1d
+ 1277 06f2 74000000 		.4byte	.LASF97
+ 1278 06f6 01       		.byte	0x1
+ 1279 06f7 47       		.byte	0x47
+ 1280 06f8 FB000000 		.4byte	0xfb
+ 1281 06fc 00000000 		.4byte	.LLST0
+ 1282 0700 1E       		.uleb128 0x1e
+ 1283 0701 706F7300 		.ascii	"pos\000"
+ 1284 0705 01       		.byte	0x1
+ 1285 0706 49       		.byte	0x49
+ 1286 0707 FB000000 		.4byte	0xfb
+ 1287 070b 01       		.uleb128 0x1
+ 1288 070c 54       		.byte	0x54
+ 1289 070d 1F       		.uleb128 0x1f
+ 1290 070e B5060000 		.4byte	0x6b5
+ 1291 0712 0C000000 		.4byte	.LBB6
+ 1292 0716 42000000 		.4byte	.LBE6-.LBB6
+ 1293 071a 01       		.byte	0x1
+ 1294 071b 4B       		.byte	0x4b
+ 1295 071c BE070000 		.4byte	0x7be
+ 1296 0720 20       		.uleb128 0x20
+ 1297 0721 C1060000 		.4byte	0x6c1
+ 1298 0725 21000000 		.4byte	.LLST1
+ 1299 0729 21       		.uleb128 0x21
+ 1300 072a 0C000000 		.4byte	.LBB7
+ 1301 072e 42000000 		.4byte	.LBE7-.LBB7
+ 1302 0732 22       		.uleb128 0x22
+ 1303 0733 CC060000 		.4byte	0x6cc
+ 1304 0737 3F000000 		.4byte	.LLST2
+ 1305 073b 23       		.uleb128 0x23
+ 1306 073c 12000000 		.4byte	.LVL4
+ 1307 0740 9C0A0000 		.4byte	0xa9c
+ 1308 0744 4E070000 		.4byte	0x74e
+ 1309 0748 24       		.uleb128 0x24
+ 1310 0749 01       		.uleb128 0x1
+ 1311 074a 50       		.byte	0x50
+ 1312 074b 01       		.uleb128 0x1
+ 1313 074c 30       		.byte	0x30
+ 1314 074d 00       		.byte	0
+ 1315 074e 23       		.uleb128 0x23
+ 1316 074f 22000000 		.4byte	.LVL6
+ 1317 0753 A70A0000 		.4byte	0xaa7
+ 1318 0757 61070000 		.4byte	0x761
+ 1319 075b 24       		.uleb128 0x24
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 27
+
+
+ 1320 075c 01       		.uleb128 0x1
+ 1321 075d 50       		.byte	0x50
+ 1322 075e 01       		.uleb128 0x1
+ 1323 075f 31       		.byte	0x31
+ 1324 0760 00       		.byte	0
+ 1325 0761 23       		.uleb128 0x23
+ 1326 0762 2A000000 		.4byte	.LVL7
+ 1327 0766 A70A0000 		.4byte	0xaa7
+ 1328 076a 74070000 		.4byte	0x774
+ 1329 076e 24       		.uleb128 0x24
+ 1330 076f 01       		.uleb128 0x1
+ 1331 0770 50       		.byte	0x50
+ 1332 0771 01       		.uleb128 0x1
+ 1333 0772 30       		.byte	0x30
+ 1334 0773 00       		.byte	0
+ 1335 0774 23       		.uleb128 0x23
+ 1336 0775 30000000 		.4byte	.LVL8
+ 1337 0779 9C0A0000 		.4byte	0xa9c
+ 1338 077d 87070000 		.4byte	0x787
+ 1339 0781 24       		.uleb128 0x24
+ 1340 0782 01       		.uleb128 0x1
+ 1341 0783 50       		.byte	0x50
+ 1342 0784 01       		.uleb128 0x1
+ 1343 0785 30       		.byte	0x30
+ 1344 0786 00       		.byte	0
+ 1345 0787 23       		.uleb128 0x23
+ 1346 0788 36000000 		.4byte	.LVL9
+ 1347 078c B20A0000 		.4byte	0xab2
+ 1348 0790 9A070000 		.4byte	0x79a
+ 1349 0794 24       		.uleb128 0x24
+ 1350 0795 01       		.uleb128 0x1
+ 1351 0796 50       		.byte	0x50
+ 1352 0797 01       		.uleb128 0x1
+ 1353 0798 3A       		.byte	0x3a
+ 1354 0799 00       		.byte	0
+ 1355 079a 23       		.uleb128 0x23
+ 1356 079b 3C000000 		.4byte	.LVL10
+ 1357 079f 9C0A0000 		.4byte	0xa9c
+ 1358 07a3 AD070000 		.4byte	0x7ad
+ 1359 07a7 24       		.uleb128 0x24
+ 1360 07a8 01       		.uleb128 0x1
+ 1361 07a9 50       		.byte	0x50
+ 1362 07aa 01       		.uleb128 0x1
+ 1363 07ab 31       		.byte	0x31
+ 1364 07ac 00       		.byte	0
+ 1365 07ad 25       		.uleb128 0x25
+ 1366 07ae 42000000 		.4byte	.LVL11
+ 1367 07b2 B20A0000 		.4byte	0xab2
+ 1368 07b6 24       		.uleb128 0x24
+ 1369 07b7 01       		.uleb128 0x1
+ 1370 07b8 50       		.byte	0x50
+ 1371 07b9 01       		.uleb128 0x1
+ 1372 07ba 3A       		.byte	0x3a
+ 1373 07bb 00       		.byte	0
+ 1374 07bc 00       		.byte	0
+ 1375 07bd 00       		.byte	0
+ 1376 07be 1F       		.uleb128 0x1f
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 28
+
+
+ 1377 07bf 8E060000 		.4byte	0x68e
+ 1378 07c3 66000000 		.4byte	.LBB8
+ 1379 07c7 32000000 		.4byte	.LBE8-.LBB8
+ 1380 07cb 01       		.byte	0x1
+ 1381 07cc 50       		.byte	0x50
+ 1382 07cd 43080000 		.4byte	0x843
+ 1383 07d1 21       		.uleb128 0x21
+ 1384 07d2 66000000 		.4byte	.LBB9
+ 1385 07d6 32000000 		.4byte	.LBE9-.LBB9
+ 1386 07da 22       		.uleb128 0x22
+ 1387 07db 9E060000 		.4byte	0x69e
+ 1388 07df 69000000 		.4byte	.LLST3
+ 1389 07e3 22       		.uleb128 0x22
+ 1390 07e4 A9060000 		.4byte	0x6a9
+ 1391 07e8 87000000 		.4byte	.LLST4
+ 1392 07ec 23       		.uleb128 0x23
+ 1393 07ed 76000000 		.4byte	.LVL24
+ 1394 07f1 9C0A0000 		.4byte	0xa9c
+ 1395 07f5 FF070000 		.4byte	0x7ff
+ 1396 07f9 24       		.uleb128 0x24
+ 1397 07fa 01       		.uleb128 0x1
+ 1398 07fb 50       		.byte	0x50
+ 1399 07fc 01       		.uleb128 0x1
+ 1400 07fd 31       		.byte	0x31
+ 1401 07fe 00       		.byte	0
+ 1402 07ff 23       		.uleb128 0x23
+ 1403 0800 7C000000 		.4byte	.LVL25
+ 1404 0804 B20A0000 		.4byte	0xab2
+ 1405 0808 12080000 		.4byte	0x812
+ 1406 080c 24       		.uleb128 0x24
+ 1407 080d 01       		.uleb128 0x1
+ 1408 080e 50       		.byte	0x50
+ 1409 080f 01       		.uleb128 0x1
+ 1410 0810 3A       		.byte	0x3a
+ 1411 0811 00       		.byte	0
+ 1412 0812 23       		.uleb128 0x23
+ 1413 0813 82000000 		.4byte	.LVL26
+ 1414 0817 9C0A0000 		.4byte	0xa9c
+ 1415 081b 25080000 		.4byte	0x825
+ 1416 081f 24       		.uleb128 0x24
+ 1417 0820 01       		.uleb128 0x1
+ 1418 0821 50       		.byte	0x50
+ 1419 0822 01       		.uleb128 0x1
+ 1420 0823 30       		.byte	0x30
+ 1421 0824 00       		.byte	0
+ 1422 0825 23       		.uleb128 0x23
+ 1423 0826 88000000 		.4byte	.LVL27
+ 1424 082a B20A0000 		.4byte	0xab2
+ 1425 082e 38080000 		.4byte	0x838
+ 1426 0832 24       		.uleb128 0x24
+ 1427 0833 01       		.uleb128 0x1
+ 1428 0834 50       		.byte	0x50
+ 1429 0835 01       		.uleb128 0x1
+ 1430 0836 3A       		.byte	0x3a
+ 1431 0837 00       		.byte	0
+ 1432 0838 26       		.uleb128 0x26
+ 1433 0839 8C000000 		.4byte	.LVL28
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 29
+
+
+ 1434 083d BD0A0000 		.4byte	0xabd
+ 1435 0841 00       		.byte	0
+ 1436 0842 00       		.byte	0
+ 1437 0843 23       		.uleb128 0x23
+ 1438 0844 0A000000 		.4byte	.LVL2
+ 1439 0848 C80A0000 		.4byte	0xac8
+ 1440 084c 56080000 		.4byte	0x856
+ 1441 0850 24       		.uleb128 0x24
+ 1442 0851 01       		.uleb128 0x1
+ 1443 0852 50       		.byte	0x50
+ 1444 0853 01       		.uleb128 0x1
+ 1445 0854 30       		.byte	0x30
+ 1446 0855 00       		.byte	0
+ 1447 0856 23       		.uleb128 0x23
+ 1448 0857 54000000 		.4byte	.LVL17
+ 1449 085b 9C0A0000 		.4byte	0xa9c
+ 1450 085f 69080000 		.4byte	0x869
+ 1451 0863 24       		.uleb128 0x24
+ 1452 0864 01       		.uleb128 0x1
+ 1453 0865 50       		.byte	0x50
+ 1454 0866 01       		.uleb128 0x1
+ 1455 0867 31       		.byte	0x31
+ 1456 0868 00       		.byte	0
+ 1457 0869 23       		.uleb128 0x23
+ 1458 086a 5A000000 		.4byte	.LVL18
+ 1459 086e B20A0000 		.4byte	0xab2
+ 1460 0872 7C080000 		.4byte	0x87c
+ 1461 0876 24       		.uleb128 0x24
+ 1462 0877 01       		.uleb128 0x1
+ 1463 0878 50       		.byte	0x50
+ 1464 0879 01       		.uleb128 0x1
+ 1465 087a 3A       		.byte	0x3a
+ 1466 087b 00       		.byte	0
+ 1467 087c 23       		.uleb128 0x23
+ 1468 087d 60000000 		.4byte	.LVL19
+ 1469 0881 9C0A0000 		.4byte	0xa9c
+ 1470 0885 8F080000 		.4byte	0x88f
+ 1471 0889 24       		.uleb128 0x24
+ 1472 088a 01       		.uleb128 0x1
+ 1473 088b 50       		.byte	0x50
+ 1474 088c 01       		.uleb128 0x1
+ 1475 088d 30       		.byte	0x30
+ 1476 088e 00       		.byte	0
+ 1477 088f 23       		.uleb128 0x23
+ 1478 0890 66000000 		.4byte	.LVL20
+ 1479 0894 B20A0000 		.4byte	0xab2
+ 1480 0898 A2080000 		.4byte	0x8a2
+ 1481 089c 24       		.uleb128 0x24
+ 1482 089d 01       		.uleb128 0x1
+ 1483 089e 50       		.byte	0x50
+ 1484 089f 01       		.uleb128 0x1
+ 1485 08a0 3A       		.byte	0x3a
+ 1486 08a1 00       		.byte	0
+ 1487 08a2 25       		.uleb128 0x25
+ 1488 08a3 9E000000 		.4byte	.LVL33
+ 1489 08a7 C80A0000 		.4byte	0xac8
+ 1490 08ab 24       		.uleb128 0x24
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 30
+
+
+ 1491 08ac 01       		.uleb128 0x1
+ 1492 08ad 50       		.byte	0x50
+ 1493 08ae 01       		.uleb128 0x1
+ 1494 08af 31       		.byte	0x31
+ 1495 08b0 00       		.byte	0
+ 1496 08b1 00       		.byte	0
+ 1497 08b2 27       		.uleb128 0x27
+ 1498 08b3 C2030000 		.4byte	.LASF113
+ 1499 08b7 01       		.byte	0x1
+ 1500 08b8 59       		.byte	0x59
+ 1501 08b9 00000000 		.4byte	.LFB66
+ 1502 08bd 10000000 		.4byte	.LFE66-.LFB66
+ 1503 08c1 01       		.uleb128 0x1
+ 1504 08c2 9C       		.byte	0x9c
+ 1505 08c3 EB080000 		.4byte	0x8eb
+ 1506 08c7 23       		.uleb128 0x23
+ 1507 08c8 08000000 		.4byte	.LVL34
+ 1508 08cc D8060000 		.4byte	0x6d8
+ 1509 08d0 DB080000 		.4byte	0x8db
+ 1510 08d4 24       		.uleb128 0x24
+ 1511 08d5 01       		.uleb128 0x1
+ 1512 08d6 50       		.byte	0x50
+ 1513 08d7 02       		.uleb128 0x2
+ 1514 08d8 08       		.byte	0x8
+ 1515 08d9 80       		.byte	0x80
+ 1516 08da 00       		.byte	0
+ 1517 08db 25       		.uleb128 0x25
+ 1518 08dc 0E000000 		.4byte	.LVL35
+ 1519 08e0 D30A0000 		.4byte	0xad3
+ 1520 08e4 24       		.uleb128 0x24
+ 1521 08e5 01       		.uleb128 0x1
+ 1522 08e6 50       		.byte	0x50
+ 1523 08e7 01       		.uleb128 0x1
+ 1524 08e8 35       		.byte	0x35
+ 1525 08e9 00       		.byte	0
+ 1526 08ea 00       		.byte	0
+ 1527 08eb 1C       		.uleb128 0x1c
+ 1528 08ec 25000000 		.4byte	.LASF96
+ 1529 08f0 01       		.byte	0x1
+ 1530 08f1 63       		.byte	0x63
+ 1531 08f2 EF000000 		.4byte	0xef
+ 1532 08f6 00000000 		.4byte	.LFB67
+ 1533 08fa D8000000 		.4byte	.LFE67-.LFB67
+ 1534 08fe 01       		.uleb128 0x1
+ 1535 08ff 9C       		.byte	0x9c
+ 1536 0900 140A0000 		.4byte	0xa14
+ 1537 0904 28       		.uleb128 0x28
+ 1538 0905 5800     		.ascii	"X\000"
+ 1539 0907 01       		.byte	0x1
+ 1540 0908 63       		.byte	0x63
+ 1541 0909 140A0000 		.4byte	0xa14
+ 1542 090d A5000000 		.4byte	.LLST5
+ 1543 0911 28       		.uleb128 0x28
+ 1544 0912 5900     		.ascii	"Y\000"
+ 1545 0914 01       		.byte	0x1
+ 1546 0915 63       		.byte	0x63
+ 1547 0916 140A0000 		.4byte	0xa14
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 31
+
+
+ 1548 091a D1000000 		.4byte	.LLST6
+ 1549 091e 29       		.uleb128 0x29
+ 1550 091f 783000   		.ascii	"x0\000"
+ 1551 0922 01       		.byte	0x1
+ 1552 0923 65       		.byte	0x65
+ 1553 0924 FB000000 		.4byte	0xfb
+ 1554 0928 FD000000 		.4byte	.LLST7
+ 1555 092c 29       		.uleb128 0x29
+ 1556 092d 793000   		.ascii	"y0\000"
+ 1557 0930 01       		.byte	0x1
+ 1558 0931 65       		.byte	0x65
+ 1559 0932 FB000000 		.4byte	0xfb
+ 1560 0936 10010000 		.4byte	.LLST8
+ 1561 093a 29       		.uleb128 0x29
+ 1562 093b 783100   		.ascii	"x1\000"
+ 1563 093e 01       		.byte	0x1
+ 1564 093f 65       		.byte	0x65
+ 1565 0940 FB000000 		.4byte	0xfb
+ 1566 0944 23010000 		.4byte	.LLST9
+ 1567 0948 29       		.uleb128 0x29
+ 1568 0949 793100   		.ascii	"y1\000"
+ 1569 094c 01       		.byte	0x1
+ 1570 094d 65       		.byte	0x65
+ 1571 094e FB000000 		.4byte	0xfb
+ 1572 0952 41010000 		.4byte	.LLST10
+ 1573 0956 29       		.uleb128 0x29
+ 1574 0957 78617600 		.ascii	"xav\000"
+ 1575 095b 01       		.byte	0x1
+ 1576 095c 65       		.byte	0x65
+ 1577 095d FB000000 		.4byte	0xfb
+ 1578 0961 5F010000 		.4byte	.LLST11
+ 1579 0965 29       		.uleb128 0x29
+ 1580 0966 79617600 		.ascii	"yav\000"
+ 1581 096a 01       		.byte	0x1
+ 1582 096b 65       		.byte	0x65
+ 1583 096c FB000000 		.4byte	0xfb
+ 1584 0970 90010000 		.4byte	.LLST12
+ 1585 0974 29       		.uleb128 0x29
+ 1586 0975 707800   		.ascii	"px\000"
+ 1587 0978 01       		.byte	0x1
+ 1588 0979 65       		.byte	0x65
+ 1589 097a FB000000 		.4byte	0xfb
+ 1590 097e A3010000 		.4byte	.LLST13
+ 1591 0982 29       		.uleb128 0x29
+ 1592 0983 707900   		.ascii	"py\000"
+ 1593 0986 01       		.byte	0x1
+ 1594 0987 65       		.byte	0x65
+ 1595 0988 FB000000 		.4byte	0xfb
+ 1596 098c B6010000 		.4byte	.LLST14
+ 1597 0990 2A       		.uleb128 0x2a
+ 1598 0991 74030000 		.4byte	.LASF98
+ 1599 0995 01       		.byte	0x1
+ 1600 0996 66       		.byte	0x66
+ 1601 0997 FB000000 		.4byte	0xfb
+ 1602 099b C9010000 		.4byte	.LLST15
+ 1603 099f 23       		.uleb128 0x23
+ 1604 09a0 10000000 		.4byte	.LVL39
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 32
+
+
+ 1605 09a4 D8060000 		.4byte	0x6d8
+ 1606 09a8 B3090000 		.4byte	0x9b3
+ 1607 09ac 24       		.uleb128 0x24
+ 1608 09ad 01       		.uleb128 0x1
+ 1609 09ae 50       		.byte	0x50
+ 1610 09af 02       		.uleb128 0x2
+ 1611 09b0 08       		.byte	0x8
+ 1612 09b1 90       		.byte	0x90
+ 1613 09b2 00       		.byte	0
+ 1614 09b3 23       		.uleb128 0x23
+ 1615 09b4 16000000 		.4byte	.LVL40
+ 1616 09b8 D8060000 		.4byte	0x6d8
+ 1617 09bc C7090000 		.4byte	0x9c7
+ 1618 09c0 24       		.uleb128 0x24
+ 1619 09c1 01       		.uleb128 0x1
+ 1620 09c2 50       		.byte	0x50
+ 1621 09c3 02       		.uleb128 0x2
+ 1622 09c4 08       		.byte	0x8
+ 1623 09c5 90       		.byte	0x90
+ 1624 09c6 00       		.byte	0
+ 1625 09c7 23       		.uleb128 0x23
+ 1626 09c8 1E000000 		.4byte	.LVL42
+ 1627 09cc D8060000 		.4byte	0x6d8
+ 1628 09d0 DB090000 		.4byte	0x9db
+ 1629 09d4 24       		.uleb128 0x24
+ 1630 09d5 01       		.uleb128 0x1
+ 1631 09d6 50       		.byte	0x50
+ 1632 09d7 02       		.uleb128 0x2
+ 1633 09d8 08       		.byte	0x8
+ 1634 09d9 90       		.byte	0x90
+ 1635 09da 00       		.byte	0
+ 1636 09db 23       		.uleb128 0x23
+ 1637 09dc 26000000 		.4byte	.LVL44
+ 1638 09e0 D8060000 		.4byte	0x6d8
+ 1639 09e4 EF090000 		.4byte	0x9ef
+ 1640 09e8 24       		.uleb128 0x24
+ 1641 09e9 01       		.uleb128 0x1
+ 1642 09ea 50       		.byte	0x50
+ 1643 09eb 02       		.uleb128 0x2
+ 1644 09ec 08       		.byte	0x8
+ 1645 09ed D0       		.byte	0xd0
+ 1646 09ee 00       		.byte	0
+ 1647 09ef 23       		.uleb128 0x23
+ 1648 09f0 2C000000 		.4byte	.LVL45
+ 1649 09f4 D8060000 		.4byte	0x6d8
+ 1650 09f8 030A0000 		.4byte	0xa03
+ 1651 09fc 24       		.uleb128 0x24
+ 1652 09fd 01       		.uleb128 0x1
+ 1653 09fe 50       		.byte	0x50
+ 1654 09ff 02       		.uleb128 0x2
+ 1655 0a00 08       		.byte	0x8
+ 1656 0a01 D0       		.byte	0xd0
+ 1657 0a02 00       		.byte	0
+ 1658 0a03 25       		.uleb128 0x25
+ 1659 0a04 34000000 		.4byte	.LVL47
+ 1660 0a08 D8060000 		.4byte	0x6d8
+ 1661 0a0c 24       		.uleb128 0x24
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 33
+
+
+ 1662 0a0d 01       		.uleb128 0x1
+ 1663 0a0e 50       		.byte	0x50
+ 1664 0a0f 02       		.uleb128 0x2
+ 1665 0a10 08       		.byte	0x8
+ 1666 0a11 D0       		.byte	0xd0
+ 1667 0a12 00       		.byte	0
+ 1668 0a13 00       		.byte	0
+ 1669 0a14 07       		.uleb128 0x7
+ 1670 0a15 04       		.byte	0x4
+ 1671 0a16 FB000000 		.4byte	0xfb
+ 1672 0a1a 1C       		.uleb128 0x1c
+ 1673 0a1b 76020000 		.4byte	.LASF99
+ 1674 0a1f 01       		.byte	0x1
+ 1675 0a20 8D       		.byte	0x8d
+ 1676 0a21 FB000000 		.4byte	0xfb
+ 1677 0a25 00000000 		.4byte	.LFB68
+ 1678 0a29 16000000 		.4byte	.LFE68-.LFB68
+ 1679 0a2d 01       		.uleb128 0x1
+ 1680 0a2e 9C       		.byte	0x9c
+ 1681 0a2f 580A0000 		.4byte	0xa58
+ 1682 0a33 23       		.uleb128 0x23
+ 1683 0a34 08000000 		.4byte	.LVL64
+ 1684 0a38 D8060000 		.4byte	0x6d8
+ 1685 0a3c 470A0000 		.4byte	0xa47
+ 1686 0a40 24       		.uleb128 0x24
+ 1687 0a41 01       		.uleb128 0x1
+ 1688 0a42 50       		.byte	0x50
+ 1689 0a43 02       		.uleb128 0x2
+ 1690 0a44 08       		.byte	0x8
+ 1691 0a45 C0       		.byte	0xc0
+ 1692 0a46 00       		.byte	0
+ 1693 0a47 25       		.uleb128 0x25
+ 1694 0a48 10000000 		.4byte	.LVL65
+ 1695 0a4c D8060000 		.4byte	0x6d8
+ 1696 0a50 24       		.uleb128 0x24
+ 1697 0a51 01       		.uleb128 0x1
+ 1698 0a52 50       		.byte	0x50
+ 1699 0a53 02       		.uleb128 0x2
+ 1700 0a54 08       		.byte	0x8
+ 1701 0a55 B0       		.byte	0xb0
+ 1702 0a56 00       		.byte	0
+ 1703 0a57 00       		.byte	0
+ 1704 0a58 2B       		.uleb128 0x2b
+ 1705 0a59 B5030000 		.4byte	.LASF100
+ 1706 0a5d 07       		.byte	0x7
+ 1707 0a5e 1207     		.2byte	0x712
+ 1708 0a60 640A0000 		.4byte	0xa64
+ 1709 0a64 2C       		.uleb128 0x2c
+ 1710 0a65 D9000000 		.4byte	0xd9
+ 1711 0a69 2D       		.uleb128 0x2d
+ 1712 0a6a 15020000 		.4byte	.LASF101
+ 1713 0a6e 08       		.byte	0x8
+ 1714 0a6f 11       		.byte	0x11
+ 1715 0a70 FB000000 		.4byte	0xfb
+ 1716 0a74 05       		.uleb128 0x5
+ 1717 0a75 03       		.byte	0x3
+ 1718 0a76 00000000 		.4byte	PosX
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 34
+
+
+ 1719 0a7a 2D       		.uleb128 0x2d
+ 1720 0a7b 1A020000 		.4byte	.LASF102
+ 1721 0a7f 08       		.byte	0x8
+ 1722 0a80 12       		.byte	0x12
+ 1723 0a81 FB000000 		.4byte	0xfb
+ 1724 0a85 05       		.uleb128 0x5
+ 1725 0a86 03       		.byte	0x3
+ 1726 0a87 00000000 		.4byte	PosY
+ 1727 0a8b 2D       		.uleb128 0x2d
+ 1728 0a8c 63030000 		.4byte	.LASF103
+ 1729 0a90 09       		.byte	0x9
+ 1730 0a91 33       		.byte	0x33
+ 1731 0a92 82060000 		.4byte	0x682
+ 1732 0a96 05       		.uleb128 0x5
+ 1733 0a97 03       		.byte	0x3
+ 1734 0a98 00000000 		.4byte	gui1963
+ 1735 0a9c 2E       		.uleb128 0x2e
+ 1736 0a9d F7030000 		.4byte	.LASF104
+ 1737 0aa1 F7030000 		.4byte	.LASF104
+ 1738 0aa5 0A       		.byte	0xa
+ 1739 0aa6 26       		.byte	0x26
+ 1740 0aa7 2E       		.uleb128 0x2e
+ 1741 0aa8 D0030000 		.4byte	.LASF105
+ 1742 0aac D0030000 		.4byte	.LASF105
+ 1743 0ab0 0B       		.byte	0xb
+ 1744 0ab1 26       		.byte	0x26
+ 1745 0ab2 2E       		.uleb128 0x2e
+ 1746 0ab3 3F020000 		.4byte	.LASF106
+ 1747 0ab7 3F020000 		.4byte	.LASF106
+ 1748 0abb 0C       		.byte	0xc
+ 1749 0abc 79       		.byte	0x79
+ 1750 0abd 2E       		.uleb128 0x2e
+ 1751 0abe 6A000000 		.4byte	.LASF107
+ 1752 0ac2 6A000000 		.4byte	.LASF107
+ 1753 0ac6 0D       		.byte	0xd
+ 1754 0ac7 29       		.byte	0x29
+ 1755 0ac8 2E       		.uleb128 0x2e
+ 1756 0ac9 1F020000 		.4byte	.LASF108
+ 1757 0acd 1F020000 		.4byte	.LASF108
+ 1758 0ad1 0E       		.byte	0xe
+ 1759 0ad2 26       		.byte	0x26
+ 1760 0ad3 2E       		.uleb128 0x2e
+ 1761 0ad4 00000000 		.4byte	.LASF109
+ 1762 0ad8 00000000 		.4byte	.LASF109
+ 1763 0adc 0C       		.byte	0xc
+ 1764 0add 76       		.byte	0x76
+ 1765 0ade 00       		.byte	0
+ 1766              		.section	.debug_abbrev,"",%progbits
+ 1767              	.Ldebug_abbrev0:
+ 1768 0000 01       		.uleb128 0x1
+ 1769 0001 11       		.uleb128 0x11
+ 1770 0002 01       		.byte	0x1
+ 1771 0003 25       		.uleb128 0x25
+ 1772 0004 0E       		.uleb128 0xe
+ 1773 0005 13       		.uleb128 0x13
+ 1774 0006 0B       		.uleb128 0xb
+ 1775 0007 03       		.uleb128 0x3
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 35
+
+
+ 1776 0008 0E       		.uleb128 0xe
+ 1777 0009 1B       		.uleb128 0x1b
+ 1778 000a 0E       		.uleb128 0xe
+ 1779 000b 55       		.uleb128 0x55
+ 1780 000c 17       		.uleb128 0x17
+ 1781 000d 11       		.uleb128 0x11
+ 1782 000e 01       		.uleb128 0x1
+ 1783 000f 10       		.uleb128 0x10
+ 1784 0010 17       		.uleb128 0x17
+ 1785 0011 00       		.byte	0
+ 1786 0012 00       		.byte	0
+ 1787 0013 02       		.uleb128 0x2
+ 1788 0014 16       		.uleb128 0x16
+ 1789 0015 00       		.byte	0
+ 1790 0016 03       		.uleb128 0x3
+ 1791 0017 0E       		.uleb128 0xe
+ 1792 0018 3A       		.uleb128 0x3a
+ 1793 0019 0B       		.uleb128 0xb
+ 1794 001a 3B       		.uleb128 0x3b
+ 1795 001b 0B       		.uleb128 0xb
+ 1796 001c 49       		.uleb128 0x49
+ 1797 001d 13       		.uleb128 0x13
+ 1798 001e 00       		.byte	0
+ 1799 001f 00       		.byte	0
+ 1800 0020 03       		.uleb128 0x3
+ 1801 0021 24       		.uleb128 0x24
+ 1802 0022 00       		.byte	0
+ 1803 0023 0B       		.uleb128 0xb
+ 1804 0024 0B       		.uleb128 0xb
+ 1805 0025 3E       		.uleb128 0x3e
+ 1806 0026 0B       		.uleb128 0xb
+ 1807 0027 03       		.uleb128 0x3
+ 1808 0028 0E       		.uleb128 0xe
+ 1809 0029 00       		.byte	0
+ 1810 002a 00       		.byte	0
+ 1811 002b 04       		.uleb128 0x4
+ 1812 002c 24       		.uleb128 0x24
+ 1813 002d 00       		.byte	0
+ 1814 002e 0B       		.uleb128 0xb
+ 1815 002f 0B       		.uleb128 0xb
+ 1816 0030 3E       		.uleb128 0x3e
+ 1817 0031 0B       		.uleb128 0xb
+ 1818 0032 03       		.uleb128 0x3
+ 1819 0033 08       		.uleb128 0x8
+ 1820 0034 00       		.byte	0
+ 1821 0035 00       		.byte	0
+ 1822 0036 05       		.uleb128 0x5
+ 1823 0037 16       		.uleb128 0x16
+ 1824 0038 00       		.byte	0
+ 1825 0039 03       		.uleb128 0x3
+ 1826 003a 0E       		.uleb128 0xe
+ 1827 003b 3A       		.uleb128 0x3a
+ 1828 003c 0B       		.uleb128 0xb
+ 1829 003d 3B       		.uleb128 0x3b
+ 1830 003e 05       		.uleb128 0x5
+ 1831 003f 49       		.uleb128 0x49
+ 1832 0040 13       		.uleb128 0x13
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 36
+
+
+ 1833 0041 00       		.byte	0
+ 1834 0042 00       		.byte	0
+ 1835 0043 06       		.uleb128 0x6
+ 1836 0044 0F       		.uleb128 0xf
+ 1837 0045 00       		.byte	0
+ 1838 0046 0B       		.uleb128 0xb
+ 1839 0047 0B       		.uleb128 0xb
+ 1840 0048 00       		.byte	0
+ 1841 0049 00       		.byte	0
+ 1842 004a 07       		.uleb128 0x7
+ 1843 004b 0F       		.uleb128 0xf
+ 1844 004c 00       		.byte	0
+ 1845 004d 0B       		.uleb128 0xb
+ 1846 004e 0B       		.uleb128 0xb
+ 1847 004f 49       		.uleb128 0x49
+ 1848 0050 13       		.uleb128 0x13
+ 1849 0051 00       		.byte	0
+ 1850 0052 00       		.byte	0
+ 1851 0053 08       		.uleb128 0x8
+ 1852 0054 04       		.uleb128 0x4
+ 1853 0055 01       		.byte	0x1
+ 1854 0056 0B       		.uleb128 0xb
+ 1855 0057 0B       		.uleb128 0xb
+ 1856 0058 49       		.uleb128 0x49
+ 1857 0059 13       		.uleb128 0x13
+ 1858 005a 3A       		.uleb128 0x3a
+ 1859 005b 0B       		.uleb128 0xb
+ 1860 005c 3B       		.uleb128 0x3b
+ 1861 005d 0B       		.uleb128 0xb
+ 1862 005e 01       		.uleb128 0x1
+ 1863 005f 13       		.uleb128 0x13
+ 1864 0060 00       		.byte	0
+ 1865 0061 00       		.byte	0
+ 1866 0062 09       		.uleb128 0x9
+ 1867 0063 28       		.uleb128 0x28
+ 1868 0064 00       		.byte	0
+ 1869 0065 03       		.uleb128 0x3
+ 1870 0066 0E       		.uleb128 0xe
+ 1871 0067 1C       		.uleb128 0x1c
+ 1872 0068 0B       		.uleb128 0xb
+ 1873 0069 00       		.byte	0
+ 1874 006a 00       		.byte	0
+ 1875 006b 0A       		.uleb128 0xa
+ 1876 006c 13       		.uleb128 0x13
+ 1877 006d 01       		.byte	0x1
+ 1878 006e 0B       		.uleb128 0xb
+ 1879 006f 0B       		.uleb128 0xb
+ 1880 0070 3A       		.uleb128 0x3a
+ 1881 0071 0B       		.uleb128 0xb
+ 1882 0072 3B       		.uleb128 0x3b
+ 1883 0073 0B       		.uleb128 0xb
+ 1884 0074 01       		.uleb128 0x1
+ 1885 0075 13       		.uleb128 0x13
+ 1886 0076 00       		.byte	0
+ 1887 0077 00       		.byte	0
+ 1888 0078 0B       		.uleb128 0xb
+ 1889 0079 0D       		.uleb128 0xd
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 37
+
+
+ 1890 007a 00       		.byte	0
+ 1891 007b 03       		.uleb128 0x3
+ 1892 007c 08       		.uleb128 0x8
+ 1893 007d 3A       		.uleb128 0x3a
+ 1894 007e 0B       		.uleb128 0xb
+ 1895 007f 3B       		.uleb128 0x3b
+ 1896 0080 0B       		.uleb128 0xb
+ 1897 0081 49       		.uleb128 0x49
+ 1898 0082 13       		.uleb128 0x13
+ 1899 0083 38       		.uleb128 0x38
+ 1900 0084 0B       		.uleb128 0xb
+ 1901 0085 00       		.byte	0
+ 1902 0086 00       		.byte	0
+ 1903 0087 0C       		.uleb128 0xc
+ 1904 0088 0D       		.uleb128 0xd
+ 1905 0089 00       		.byte	0
+ 1906 008a 03       		.uleb128 0x3
+ 1907 008b 0E       		.uleb128 0xe
+ 1908 008c 3A       		.uleb128 0x3a
+ 1909 008d 0B       		.uleb128 0xb
+ 1910 008e 3B       		.uleb128 0x3b
+ 1911 008f 0B       		.uleb128 0xb
+ 1912 0090 49       		.uleb128 0x49
+ 1913 0091 13       		.uleb128 0x13
+ 1914 0092 38       		.uleb128 0x38
+ 1915 0093 0B       		.uleb128 0xb
+ 1916 0094 00       		.byte	0
+ 1917 0095 00       		.byte	0
+ 1918 0096 0D       		.uleb128 0xd
+ 1919 0097 13       		.uleb128 0x13
+ 1920 0098 01       		.byte	0x1
+ 1921 0099 03       		.uleb128 0x3
+ 1922 009a 0E       		.uleb128 0xe
+ 1923 009b 0B       		.uleb128 0xb
+ 1924 009c 0B       		.uleb128 0xb
+ 1925 009d 3A       		.uleb128 0x3a
+ 1926 009e 0B       		.uleb128 0xb
+ 1927 009f 3B       		.uleb128 0x3b
+ 1928 00a0 0B       		.uleb128 0xb
+ 1929 00a1 01       		.uleb128 0x1
+ 1930 00a2 13       		.uleb128 0x13
+ 1931 00a3 00       		.byte	0
+ 1932 00a4 00       		.byte	0
+ 1933 00a5 0E       		.uleb128 0xe
+ 1934 00a6 0D       		.uleb128 0xd
+ 1935 00a7 00       		.byte	0
+ 1936 00a8 03       		.uleb128 0x3
+ 1937 00a9 0E       		.uleb128 0xe
+ 1938 00aa 3A       		.uleb128 0x3a
+ 1939 00ab 0B       		.uleb128 0xb
+ 1940 00ac 3B       		.uleb128 0x3b
+ 1941 00ad 05       		.uleb128 0x5
+ 1942 00ae 49       		.uleb128 0x49
+ 1943 00af 13       		.uleb128 0x13
+ 1944 00b0 38       		.uleb128 0x38
+ 1945 00b1 0B       		.uleb128 0xb
+ 1946 00b2 00       		.byte	0
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 38
+
+
+ 1947 00b3 00       		.byte	0
+ 1948 00b4 0F       		.uleb128 0xf
+ 1949 00b5 13       		.uleb128 0x13
+ 1950 00b6 01       		.byte	0x1
+ 1951 00b7 03       		.uleb128 0x3
+ 1952 00b8 0E       		.uleb128 0xe
+ 1953 00b9 0B       		.uleb128 0xb
+ 1954 00ba 0B       		.uleb128 0xb
+ 1955 00bb 3A       		.uleb128 0x3a
+ 1956 00bc 0B       		.uleb128 0xb
+ 1957 00bd 3B       		.uleb128 0x3b
+ 1958 00be 05       		.uleb128 0x5
+ 1959 00bf 01       		.uleb128 0x1
+ 1960 00c0 13       		.uleb128 0x13
+ 1961 00c1 00       		.byte	0
+ 1962 00c2 00       		.byte	0
+ 1963 00c3 10       		.uleb128 0x10
+ 1964 00c4 0D       		.uleb128 0xd
+ 1965 00c5 00       		.byte	0
+ 1966 00c6 03       		.uleb128 0x3
+ 1967 00c7 08       		.uleb128 0x8
+ 1968 00c8 3A       		.uleb128 0x3a
+ 1969 00c9 0B       		.uleb128 0xb
+ 1970 00ca 3B       		.uleb128 0x3b
+ 1971 00cb 05       		.uleb128 0x5
+ 1972 00cc 49       		.uleb128 0x49
+ 1973 00cd 13       		.uleb128 0x13
+ 1974 00ce 38       		.uleb128 0x38
+ 1975 00cf 0B       		.uleb128 0xb
+ 1976 00d0 00       		.byte	0
+ 1977 00d1 00       		.byte	0
+ 1978 00d2 11       		.uleb128 0x11
+ 1979 00d3 26       		.uleb128 0x26
+ 1980 00d4 00       		.byte	0
+ 1981 00d5 49       		.uleb128 0x49
+ 1982 00d6 13       		.uleb128 0x13
+ 1983 00d7 00       		.byte	0
+ 1984 00d8 00       		.byte	0
+ 1985 00d9 12       		.uleb128 0x12
+ 1986 00da 15       		.uleb128 0x15
+ 1987 00db 01       		.byte	0x1
+ 1988 00dc 27       		.uleb128 0x27
+ 1989 00dd 19       		.uleb128 0x19
+ 1990 00de 01       		.uleb128 0x1
+ 1991 00df 13       		.uleb128 0x13
+ 1992 00e0 00       		.byte	0
+ 1993 00e1 00       		.byte	0
+ 1994 00e2 13       		.uleb128 0x13
+ 1995 00e3 05       		.uleb128 0x5
+ 1996 00e4 00       		.byte	0
+ 1997 00e5 49       		.uleb128 0x49
+ 1998 00e6 13       		.uleb128 0x13
+ 1999 00e7 00       		.byte	0
+ 2000 00e8 00       		.byte	0
+ 2001 00e9 14       		.uleb128 0x14
+ 2002 00ea 13       		.uleb128 0x13
+ 2003 00eb 01       		.byte	0x1
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 39
+
+
+ 2004 00ec 0B       		.uleb128 0xb
+ 2005 00ed 0B       		.uleb128 0xb
+ 2006 00ee 3A       		.uleb128 0x3a
+ 2007 00ef 0B       		.uleb128 0xb
+ 2008 00f0 3B       		.uleb128 0x3b
+ 2009 00f1 05       		.uleb128 0x5
+ 2010 00f2 01       		.uleb128 0x1
+ 2011 00f3 13       		.uleb128 0x13
+ 2012 00f4 00       		.byte	0
+ 2013 00f5 00       		.byte	0
+ 2014 00f6 15       		.uleb128 0x15
+ 2015 00f7 01       		.uleb128 0x1
+ 2016 00f8 01       		.byte	0x1
+ 2017 00f9 49       		.uleb128 0x49
+ 2018 00fa 13       		.uleb128 0x13
+ 2019 00fb 01       		.uleb128 0x1
+ 2020 00fc 13       		.uleb128 0x13
+ 2021 00fd 00       		.byte	0
+ 2022 00fe 00       		.byte	0
+ 2023 00ff 16       		.uleb128 0x16
+ 2024 0100 21       		.uleb128 0x21
+ 2025 0101 00       		.byte	0
+ 2026 0102 49       		.uleb128 0x49
+ 2027 0103 13       		.uleb128 0x13
+ 2028 0104 2F       		.uleb128 0x2f
+ 2029 0105 0B       		.uleb128 0xb
+ 2030 0106 00       		.byte	0
+ 2031 0107 00       		.byte	0
+ 2032 0108 17       		.uleb128 0x17
+ 2033 0109 2E       		.uleb128 0x2e
+ 2034 010a 01       		.byte	0x1
+ 2035 010b 3F       		.uleb128 0x3f
+ 2036 010c 19       		.uleb128 0x19
+ 2037 010d 03       		.uleb128 0x3
+ 2038 010e 0E       		.uleb128 0xe
+ 2039 010f 3A       		.uleb128 0x3a
+ 2040 0110 0B       		.uleb128 0xb
+ 2041 0111 3B       		.uleb128 0x3b
+ 2042 0112 0B       		.uleb128 0xb
+ 2043 0113 49       		.uleb128 0x49
+ 2044 0114 13       		.uleb128 0x13
+ 2045 0115 20       		.uleb128 0x20
+ 2046 0116 0B       		.uleb128 0xb
+ 2047 0117 01       		.uleb128 0x1
+ 2048 0118 13       		.uleb128 0x13
+ 2049 0119 00       		.byte	0
+ 2050 011a 00       		.byte	0
+ 2051 011b 18       		.uleb128 0x18
+ 2052 011c 34       		.uleb128 0x34
+ 2053 011d 00       		.byte	0
+ 2054 011e 03       		.uleb128 0x3
+ 2055 011f 0E       		.uleb128 0xe
+ 2056 0120 3A       		.uleb128 0x3a
+ 2057 0121 0B       		.uleb128 0xb
+ 2058 0122 3B       		.uleb128 0x3b
+ 2059 0123 0B       		.uleb128 0xb
+ 2060 0124 49       		.uleb128 0x49
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 40
+
+
+ 2061 0125 13       		.uleb128 0x13
+ 2062 0126 00       		.byte	0
+ 2063 0127 00       		.byte	0
+ 2064 0128 19       		.uleb128 0x19
+ 2065 0129 34       		.uleb128 0x34
+ 2066 012a 00       		.byte	0
+ 2067 012b 03       		.uleb128 0x3
+ 2068 012c 08       		.uleb128 0x8
+ 2069 012d 3A       		.uleb128 0x3a
+ 2070 012e 0B       		.uleb128 0xb
+ 2071 012f 3B       		.uleb128 0x3b
+ 2072 0130 0B       		.uleb128 0xb
+ 2073 0131 49       		.uleb128 0x49
+ 2074 0132 13       		.uleb128 0x13
+ 2075 0133 00       		.byte	0
+ 2076 0134 00       		.byte	0
+ 2077 0135 1A       		.uleb128 0x1a
+ 2078 0136 2E       		.uleb128 0x2e
+ 2079 0137 01       		.byte	0x1
+ 2080 0138 3F       		.uleb128 0x3f
+ 2081 0139 19       		.uleb128 0x19
+ 2082 013a 03       		.uleb128 0x3
+ 2083 013b 0E       		.uleb128 0xe
+ 2084 013c 3A       		.uleb128 0x3a
+ 2085 013d 0B       		.uleb128 0xb
+ 2086 013e 3B       		.uleb128 0x3b
+ 2087 013f 0B       		.uleb128 0xb
+ 2088 0140 27       		.uleb128 0x27
+ 2089 0141 19       		.uleb128 0x19
+ 2090 0142 20       		.uleb128 0x20
+ 2091 0143 0B       		.uleb128 0xb
+ 2092 0144 01       		.uleb128 0x1
+ 2093 0145 13       		.uleb128 0x13
+ 2094 0146 00       		.byte	0
+ 2095 0147 00       		.byte	0
+ 2096 0148 1B       		.uleb128 0x1b
+ 2097 0149 05       		.uleb128 0x5
+ 2098 014a 00       		.byte	0
+ 2099 014b 03       		.uleb128 0x3
+ 2100 014c 08       		.uleb128 0x8
+ 2101 014d 3A       		.uleb128 0x3a
+ 2102 014e 0B       		.uleb128 0xb
+ 2103 014f 3B       		.uleb128 0x3b
+ 2104 0150 0B       		.uleb128 0xb
+ 2105 0151 49       		.uleb128 0x49
+ 2106 0152 13       		.uleb128 0x13
+ 2107 0153 00       		.byte	0
+ 2108 0154 00       		.byte	0
+ 2109 0155 1C       		.uleb128 0x1c
+ 2110 0156 2E       		.uleb128 0x2e
+ 2111 0157 01       		.byte	0x1
+ 2112 0158 3F       		.uleb128 0x3f
+ 2113 0159 19       		.uleb128 0x19
+ 2114 015a 03       		.uleb128 0x3
+ 2115 015b 0E       		.uleb128 0xe
+ 2116 015c 3A       		.uleb128 0x3a
+ 2117 015d 0B       		.uleb128 0xb
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 41
+
+
+ 2118 015e 3B       		.uleb128 0x3b
+ 2119 015f 0B       		.uleb128 0xb
+ 2120 0160 27       		.uleb128 0x27
+ 2121 0161 19       		.uleb128 0x19
+ 2122 0162 49       		.uleb128 0x49
+ 2123 0163 13       		.uleb128 0x13
+ 2124 0164 11       		.uleb128 0x11
+ 2125 0165 01       		.uleb128 0x1
+ 2126 0166 12       		.uleb128 0x12
+ 2127 0167 06       		.uleb128 0x6
+ 2128 0168 40       		.uleb128 0x40
+ 2129 0169 18       		.uleb128 0x18
+ 2130 016a 9742     		.uleb128 0x2117
+ 2131 016c 19       		.uleb128 0x19
+ 2132 016d 01       		.uleb128 0x1
+ 2133 016e 13       		.uleb128 0x13
+ 2134 016f 00       		.byte	0
+ 2135 0170 00       		.byte	0
+ 2136 0171 1D       		.uleb128 0x1d
+ 2137 0172 05       		.uleb128 0x5
+ 2138 0173 00       		.byte	0
+ 2139 0174 03       		.uleb128 0x3
+ 2140 0175 0E       		.uleb128 0xe
+ 2141 0176 3A       		.uleb128 0x3a
+ 2142 0177 0B       		.uleb128 0xb
+ 2143 0178 3B       		.uleb128 0x3b
+ 2144 0179 0B       		.uleb128 0xb
+ 2145 017a 49       		.uleb128 0x49
+ 2146 017b 13       		.uleb128 0x13
+ 2147 017c 02       		.uleb128 0x2
+ 2148 017d 17       		.uleb128 0x17
+ 2149 017e 00       		.byte	0
+ 2150 017f 00       		.byte	0
+ 2151 0180 1E       		.uleb128 0x1e
+ 2152 0181 34       		.uleb128 0x34
+ 2153 0182 00       		.byte	0
+ 2154 0183 03       		.uleb128 0x3
+ 2155 0184 08       		.uleb128 0x8
+ 2156 0185 3A       		.uleb128 0x3a
+ 2157 0186 0B       		.uleb128 0xb
+ 2158 0187 3B       		.uleb128 0x3b
+ 2159 0188 0B       		.uleb128 0xb
+ 2160 0189 49       		.uleb128 0x49
+ 2161 018a 13       		.uleb128 0x13
+ 2162 018b 02       		.uleb128 0x2
+ 2163 018c 18       		.uleb128 0x18
+ 2164 018d 00       		.byte	0
+ 2165 018e 00       		.byte	0
+ 2166 018f 1F       		.uleb128 0x1f
+ 2167 0190 1D       		.uleb128 0x1d
+ 2168 0191 01       		.byte	0x1
+ 2169 0192 31       		.uleb128 0x31
+ 2170 0193 13       		.uleb128 0x13
+ 2171 0194 11       		.uleb128 0x11
+ 2172 0195 01       		.uleb128 0x1
+ 2173 0196 12       		.uleb128 0x12
+ 2174 0197 06       		.uleb128 0x6
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 42
+
+
+ 2175 0198 58       		.uleb128 0x58
+ 2176 0199 0B       		.uleb128 0xb
+ 2177 019a 59       		.uleb128 0x59
+ 2178 019b 0B       		.uleb128 0xb
+ 2179 019c 01       		.uleb128 0x1
+ 2180 019d 13       		.uleb128 0x13
+ 2181 019e 00       		.byte	0
+ 2182 019f 00       		.byte	0
+ 2183 01a0 20       		.uleb128 0x20
+ 2184 01a1 05       		.uleb128 0x5
+ 2185 01a2 00       		.byte	0
+ 2186 01a3 31       		.uleb128 0x31
+ 2187 01a4 13       		.uleb128 0x13
+ 2188 01a5 02       		.uleb128 0x2
+ 2189 01a6 17       		.uleb128 0x17
+ 2190 01a7 00       		.byte	0
+ 2191 01a8 00       		.byte	0
+ 2192 01a9 21       		.uleb128 0x21
+ 2193 01aa 0B       		.uleb128 0xb
+ 2194 01ab 01       		.byte	0x1
+ 2195 01ac 11       		.uleb128 0x11
+ 2196 01ad 01       		.uleb128 0x1
+ 2197 01ae 12       		.uleb128 0x12
+ 2198 01af 06       		.uleb128 0x6
+ 2199 01b0 00       		.byte	0
+ 2200 01b1 00       		.byte	0
+ 2201 01b2 22       		.uleb128 0x22
+ 2202 01b3 34       		.uleb128 0x34
+ 2203 01b4 00       		.byte	0
+ 2204 01b5 31       		.uleb128 0x31
+ 2205 01b6 13       		.uleb128 0x13
+ 2206 01b7 02       		.uleb128 0x2
+ 2207 01b8 17       		.uleb128 0x17
+ 2208 01b9 00       		.byte	0
+ 2209 01ba 00       		.byte	0
+ 2210 01bb 23       		.uleb128 0x23
+ 2211 01bc 898201   		.uleb128 0x4109
+ 2212 01bf 01       		.byte	0x1
+ 2213 01c0 11       		.uleb128 0x11
+ 2214 01c1 01       		.uleb128 0x1
+ 2215 01c2 31       		.uleb128 0x31
+ 2216 01c3 13       		.uleb128 0x13
+ 2217 01c4 01       		.uleb128 0x1
+ 2218 01c5 13       		.uleb128 0x13
+ 2219 01c6 00       		.byte	0
+ 2220 01c7 00       		.byte	0
+ 2221 01c8 24       		.uleb128 0x24
+ 2222 01c9 8A8201   		.uleb128 0x410a
+ 2223 01cc 00       		.byte	0
+ 2224 01cd 02       		.uleb128 0x2
+ 2225 01ce 18       		.uleb128 0x18
+ 2226 01cf 9142     		.uleb128 0x2111
+ 2227 01d1 18       		.uleb128 0x18
+ 2228 01d2 00       		.byte	0
+ 2229 01d3 00       		.byte	0
+ 2230 01d4 25       		.uleb128 0x25
+ 2231 01d5 898201   		.uleb128 0x4109
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 43
+
+
+ 2232 01d8 01       		.byte	0x1
+ 2233 01d9 11       		.uleb128 0x11
+ 2234 01da 01       		.uleb128 0x1
+ 2235 01db 31       		.uleb128 0x31
+ 2236 01dc 13       		.uleb128 0x13
+ 2237 01dd 00       		.byte	0
+ 2238 01de 00       		.byte	0
+ 2239 01df 26       		.uleb128 0x26
+ 2240 01e0 898201   		.uleb128 0x4109
+ 2241 01e3 00       		.byte	0
+ 2242 01e4 11       		.uleb128 0x11
+ 2243 01e5 01       		.uleb128 0x1
+ 2244 01e6 31       		.uleb128 0x31
+ 2245 01e7 13       		.uleb128 0x13
+ 2246 01e8 00       		.byte	0
+ 2247 01e9 00       		.byte	0
+ 2248 01ea 27       		.uleb128 0x27
+ 2249 01eb 2E       		.uleb128 0x2e
+ 2250 01ec 01       		.byte	0x1
+ 2251 01ed 3F       		.uleb128 0x3f
+ 2252 01ee 19       		.uleb128 0x19
+ 2253 01ef 03       		.uleb128 0x3
+ 2254 01f0 0E       		.uleb128 0xe
+ 2255 01f1 3A       		.uleb128 0x3a
+ 2256 01f2 0B       		.uleb128 0xb
+ 2257 01f3 3B       		.uleb128 0x3b
+ 2258 01f4 0B       		.uleb128 0xb
+ 2259 01f5 27       		.uleb128 0x27
+ 2260 01f6 19       		.uleb128 0x19
+ 2261 01f7 11       		.uleb128 0x11
+ 2262 01f8 01       		.uleb128 0x1
+ 2263 01f9 12       		.uleb128 0x12
+ 2264 01fa 06       		.uleb128 0x6
+ 2265 01fb 40       		.uleb128 0x40
+ 2266 01fc 18       		.uleb128 0x18
+ 2267 01fd 9742     		.uleb128 0x2117
+ 2268 01ff 19       		.uleb128 0x19
+ 2269 0200 01       		.uleb128 0x1
+ 2270 0201 13       		.uleb128 0x13
+ 2271 0202 00       		.byte	0
+ 2272 0203 00       		.byte	0
+ 2273 0204 28       		.uleb128 0x28
+ 2274 0205 05       		.uleb128 0x5
+ 2275 0206 00       		.byte	0
+ 2276 0207 03       		.uleb128 0x3
+ 2277 0208 08       		.uleb128 0x8
+ 2278 0209 3A       		.uleb128 0x3a
+ 2279 020a 0B       		.uleb128 0xb
+ 2280 020b 3B       		.uleb128 0x3b
+ 2281 020c 0B       		.uleb128 0xb
+ 2282 020d 49       		.uleb128 0x49
+ 2283 020e 13       		.uleb128 0x13
+ 2284 020f 02       		.uleb128 0x2
+ 2285 0210 17       		.uleb128 0x17
+ 2286 0211 00       		.byte	0
+ 2287 0212 00       		.byte	0
+ 2288 0213 29       		.uleb128 0x29
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 44
+
+
+ 2289 0214 34       		.uleb128 0x34
+ 2290 0215 00       		.byte	0
+ 2291 0216 03       		.uleb128 0x3
+ 2292 0217 08       		.uleb128 0x8
+ 2293 0218 3A       		.uleb128 0x3a
+ 2294 0219 0B       		.uleb128 0xb
+ 2295 021a 3B       		.uleb128 0x3b
+ 2296 021b 0B       		.uleb128 0xb
+ 2297 021c 49       		.uleb128 0x49
+ 2298 021d 13       		.uleb128 0x13
+ 2299 021e 02       		.uleb128 0x2
+ 2300 021f 17       		.uleb128 0x17
+ 2301 0220 00       		.byte	0
+ 2302 0221 00       		.byte	0
+ 2303 0222 2A       		.uleb128 0x2a
+ 2304 0223 34       		.uleb128 0x34
+ 2305 0224 00       		.byte	0
+ 2306 0225 03       		.uleb128 0x3
+ 2307 0226 0E       		.uleb128 0xe
+ 2308 0227 3A       		.uleb128 0x3a
+ 2309 0228 0B       		.uleb128 0xb
+ 2310 0229 3B       		.uleb128 0x3b
+ 2311 022a 0B       		.uleb128 0xb
+ 2312 022b 49       		.uleb128 0x49
+ 2313 022c 13       		.uleb128 0x13
+ 2314 022d 02       		.uleb128 0x2
+ 2315 022e 17       		.uleb128 0x17
+ 2316 022f 00       		.byte	0
+ 2317 0230 00       		.byte	0
+ 2318 0231 2B       		.uleb128 0x2b
+ 2319 0232 34       		.uleb128 0x34
+ 2320 0233 00       		.byte	0
+ 2321 0234 03       		.uleb128 0x3
+ 2322 0235 0E       		.uleb128 0xe
+ 2323 0236 3A       		.uleb128 0x3a
+ 2324 0237 0B       		.uleb128 0xb
+ 2325 0238 3B       		.uleb128 0x3b
+ 2326 0239 05       		.uleb128 0x5
+ 2327 023a 49       		.uleb128 0x49
+ 2328 023b 13       		.uleb128 0x13
+ 2329 023c 3F       		.uleb128 0x3f
+ 2330 023d 19       		.uleb128 0x19
+ 2331 023e 3C       		.uleb128 0x3c
+ 2332 023f 19       		.uleb128 0x19
+ 2333 0240 00       		.byte	0
+ 2334 0241 00       		.byte	0
+ 2335 0242 2C       		.uleb128 0x2c
+ 2336 0243 35       		.uleb128 0x35
+ 2337 0244 00       		.byte	0
+ 2338 0245 49       		.uleb128 0x49
+ 2339 0246 13       		.uleb128 0x13
+ 2340 0247 00       		.byte	0
+ 2341 0248 00       		.byte	0
+ 2342 0249 2D       		.uleb128 0x2d
+ 2343 024a 34       		.uleb128 0x34
+ 2344 024b 00       		.byte	0
+ 2345 024c 03       		.uleb128 0x3
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 45
+
+
+ 2346 024d 0E       		.uleb128 0xe
+ 2347 024e 3A       		.uleb128 0x3a
+ 2348 024f 0B       		.uleb128 0xb
+ 2349 0250 3B       		.uleb128 0x3b
+ 2350 0251 0B       		.uleb128 0xb
+ 2351 0252 49       		.uleb128 0x49
+ 2352 0253 13       		.uleb128 0x13
+ 2353 0254 3F       		.uleb128 0x3f
+ 2354 0255 19       		.uleb128 0x19
+ 2355 0256 02       		.uleb128 0x2
+ 2356 0257 18       		.uleb128 0x18
+ 2357 0258 00       		.byte	0
+ 2358 0259 00       		.byte	0
+ 2359 025a 2E       		.uleb128 0x2e
+ 2360 025b 2E       		.uleb128 0x2e
+ 2361 025c 00       		.byte	0
+ 2362 025d 3F       		.uleb128 0x3f
+ 2363 025e 19       		.uleb128 0x19
+ 2364 025f 3C       		.uleb128 0x3c
+ 2365 0260 19       		.uleb128 0x19
+ 2366 0261 6E       		.uleb128 0x6e
+ 2367 0262 0E       		.uleb128 0xe
+ 2368 0263 03       		.uleb128 0x3
+ 2369 0264 0E       		.uleb128 0xe
+ 2370 0265 3A       		.uleb128 0x3a
+ 2371 0266 0B       		.uleb128 0xb
+ 2372 0267 3B       		.uleb128 0x3b
+ 2373 0268 0B       		.uleb128 0xb
+ 2374 0269 00       		.byte	0
+ 2375 026a 00       		.byte	0
+ 2376 026b 00       		.byte	0
+ 2377              		.section	.debug_loc,"",%progbits
+ 2378              	.Ldebug_loc0:
+ 2379              	.LLST0:
+ 2380 0000 00000000 		.4byte	.LVL0
+ 2381 0004 06000000 		.4byte	.LVL1
+ 2382 0008 0100     		.2byte	0x1
+ 2383 000a 50       		.byte	0x50
+ 2384 000b 06000000 		.4byte	.LVL1
+ 2385 000f A2000000 		.4byte	.LFE65
+ 2386 0013 0400     		.2byte	0x4
+ 2387 0015 F3       		.byte	0xf3
+ 2388 0016 01       		.uleb128 0x1
+ 2389 0017 50       		.byte	0x50
+ 2390 0018 9F       		.byte	0x9f
+ 2391 0019 00000000 		.4byte	0
+ 2392 001d 00000000 		.4byte	0
+ 2393              	.LLST1:
+ 2394 0021 0C000000 		.4byte	.LVL3
+ 2395 0025 44000000 		.4byte	.LVL12
+ 2396 0029 0100     		.2byte	0x1
+ 2397 002b 54       		.byte	0x54
+ 2398 002c 46000000 		.4byte	.LVL13
+ 2399 0030 4E000000 		.4byte	.LVL16
+ 2400 0034 0100     		.2byte	0x1
+ 2401 0036 54       		.byte	0x54
+ 2402 0037 00000000 		.4byte	0
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 46
+
+
+ 2403 003b 00000000 		.4byte	0
+ 2404              	.LLST2:
+ 2405 003f 0C000000 		.4byte	.LVL3
+ 2406 0043 16000000 		.4byte	.LVL5
+ 2407 0047 0200     		.2byte	0x2
+ 2408 0049 30       		.byte	0x30
+ 2409 004a 9F       		.byte	0x9f
+ 2410 004b 16000000 		.4byte	.LVL5
+ 2411 004f 48000000 		.4byte	.LVL14
+ 2412 0053 0100     		.2byte	0x1
+ 2413 0055 55       		.byte	0x55
+ 2414 0056 4A000000 		.4byte	.LVL15
+ 2415 005a 4E000000 		.4byte	.LVL16
+ 2416 005e 0100     		.2byte	0x1
+ 2417 0060 55       		.byte	0x55
+ 2418 0061 00000000 		.4byte	0
+ 2419 0065 00000000 		.4byte	0
+ 2420              	.LLST3:
+ 2421 0069 6C000000 		.4byte	.LVL21
+ 2422 006d 92000000 		.4byte	.LVL30
+ 2423 0071 0100     		.2byte	0x1
+ 2424 0073 55       		.byte	0x55
+ 2425 0074 94000000 		.4byte	.LVL31
+ 2426 0078 98000000 		.4byte	.LVL32
+ 2427 007c 0100     		.2byte	0x1
+ 2428 007e 55       		.byte	0x55
+ 2429 007f 00000000 		.4byte	0
+ 2430 0083 00000000 		.4byte	0
+ 2431              	.LLST4:
+ 2432 0087 6C000000 		.4byte	.LVL21
+ 2433 008b 6E000000 		.4byte	.LVL22
+ 2434 008f 0100     		.2byte	0x1
+ 2435 0091 54       		.byte	0x54
+ 2436 0092 70000000 		.4byte	.LVL23
+ 2437 0096 98000000 		.4byte	.LVL32
+ 2438 009a 0100     		.2byte	0x1
+ 2439 009c 54       		.byte	0x54
+ 2440 009d 00000000 		.4byte	0
+ 2441 00a1 00000000 		.4byte	0
+ 2442              	.LLST5:
+ 2443 00a5 00000000 		.4byte	.LVL36
+ 2444 00a9 0A000000 		.4byte	.LVL38
+ 2445 00ad 0100     		.2byte	0x1
+ 2446 00af 50       		.byte	0x50
+ 2447 00b0 0A000000 		.4byte	.LVL38
+ 2448 00b4 CE000000 		.4byte	.LVL63
+ 2449 00b8 0100     		.2byte	0x1
+ 2450 00ba 59       		.byte	0x59
+ 2451 00bb CE000000 		.4byte	.LVL63
+ 2452 00bf D8000000 		.4byte	.LFE67
+ 2453 00c3 0400     		.2byte	0x4
+ 2454 00c5 F3       		.byte	0xf3
+ 2455 00c6 01       		.uleb128 0x1
+ 2456 00c7 50       		.byte	0x50
+ 2457 00c8 9F       		.byte	0x9f
+ 2458 00c9 00000000 		.4byte	0
+ 2459 00cd 00000000 		.4byte	0
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 47
+
+
+ 2460              	.LLST6:
+ 2461 00d1 00000000 		.4byte	.LVL36
+ 2462 00d5 0A000000 		.4byte	.LVL38
+ 2463 00d9 0100     		.2byte	0x1
+ 2464 00db 51       		.byte	0x51
+ 2465 00dc 0A000000 		.4byte	.LVL38
+ 2466 00e0 CE000000 		.4byte	.LVL63
+ 2467 00e4 0100     		.2byte	0x1
+ 2468 00e6 58       		.byte	0x58
+ 2469 00e7 CE000000 		.4byte	.LVL63
+ 2470 00eb D8000000 		.4byte	.LFE67
+ 2471 00ef 0400     		.2byte	0x4
+ 2472 00f1 F3       		.byte	0xf3
+ 2473 00f2 01       		.uleb128 0x1
+ 2474 00f3 51       		.byte	0x51
+ 2475 00f4 9F       		.byte	0x9f
+ 2476 00f5 00000000 		.4byte	0
+ 2477 00f9 00000000 		.4byte	0
+ 2478              	.LLST7:
+ 2479 00fd 2E000000 		.4byte	.LVL46
+ 2480 0101 3E000000 		.4byte	.LVL50
+ 2481 0105 0100     		.2byte	0x1
+ 2482 0107 54       		.byte	0x54
+ 2483 0108 00000000 		.4byte	0
+ 2484 010c 00000000 		.4byte	0
+ 2485              	.LLST8:
+ 2486 0110 18000000 		.4byte	.LVL41
+ 2487 0114 CE000000 		.4byte	.LVL63
+ 2488 0118 0100     		.2byte	0x1
+ 2489 011a 57       		.byte	0x57
+ 2490 011b 00000000 		.4byte	0
+ 2491 011f 00000000 		.4byte	0
+ 2492              	.LLST9:
+ 2493 0123 34000000 		.4byte	.LVL47
+ 2494 0127 A8000000 		.4byte	.LVL58
+ 2495 012b 0100     		.2byte	0x1
+ 2496 012d 50       		.byte	0x50
+ 2497 012e C8000000 		.4byte	.LVL61
+ 2498 0132 CA000000 		.4byte	.LVL62
+ 2499 0136 0100     		.2byte	0x1
+ 2500 0138 50       		.byte	0x50
+ 2501 0139 00000000 		.4byte	0
+ 2502 013d 00000000 		.4byte	0
+ 2503              	.LLST10:
+ 2504 0141 20000000 		.4byte	.LVL43
+ 2505 0145 62000000 		.4byte	.LVL52
+ 2506 0149 0100     		.2byte	0x1
+ 2507 014b 56       		.byte	0x56
+ 2508 014c C8000000 		.4byte	.LVL61
+ 2509 0150 CE000000 		.4byte	.LVL63
+ 2510 0154 0100     		.2byte	0x1
+ 2511 0156 56       		.byte	0x56
+ 2512 0157 00000000 		.4byte	0
+ 2513 015b 00000000 		.4byte	0
+ 2514              	.LLST11:
+ 2515 015f 60000000 		.4byte	.LVL51
+ 2516 0163 7A000000 		.4byte	.LVL54
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 48
+
+
+ 2517 0167 0500     		.2byte	0x5
+ 2518 0169 72       		.byte	0x72
+ 2519 016a 00       		.sleb128 0
+ 2520 016b 31       		.byte	0x31
+ 2521 016c 26       		.byte	0x26
+ 2522 016d 9F       		.byte	0x9f
+ 2523 016e 7A000000 		.4byte	.LVL54
+ 2524 0172 84000000 		.4byte	.LVL55
+ 2525 0176 1000     		.2byte	0x10
+ 2526 0178 70       		.byte	0x70
+ 2527 0179 00       		.sleb128 0
+ 2528 017a 71       		.byte	0x71
+ 2529 017b 00       		.sleb128 0
+ 2530 017c 22       		.byte	0x22
+ 2531 017d 4F       		.byte	0x4f
+ 2532 017e 25       		.byte	0x25
+ 2533 017f 70       		.byte	0x70
+ 2534 0180 00       		.sleb128 0
+ 2535 0181 22       		.byte	0x22
+ 2536 0182 71       		.byte	0x71
+ 2537 0183 00       		.sleb128 0
+ 2538 0184 22       		.byte	0x22
+ 2539 0185 31       		.byte	0x31
+ 2540 0186 26       		.byte	0x26
+ 2541 0187 9F       		.byte	0x9f
+ 2542 0188 00000000 		.4byte	0
+ 2543 018c 00000000 		.4byte	0
+ 2544              	.LLST12:
+ 2545 0190 70000000 		.4byte	.LVL53
+ 2546 0194 C8000000 		.4byte	.LVL61
+ 2547 0198 0100     		.2byte	0x1
+ 2548 019a 56       		.byte	0x56
+ 2549 019b 00000000 		.4byte	0
+ 2550 019f 00000000 		.4byte	0
+ 2551              	.LLST13:
+ 2552 01a3 8E000000 		.4byte	.LVL56
+ 2553 01a7 C8000000 		.4byte	.LVL61
+ 2554 01ab 0100     		.2byte	0x1
+ 2555 01ad 53       		.byte	0x53
+ 2556 01ae 00000000 		.4byte	0
+ 2557 01b2 00000000 		.4byte	0
+ 2558              	.LLST14:
+ 2559 01b6 B0000000 		.4byte	.LVL59
+ 2560 01ba C8000000 		.4byte	.LVL61
+ 2561 01be 0100     		.2byte	0x1
+ 2562 01c0 52       		.byte	0x52
+ 2563 01c1 00000000 		.4byte	0
+ 2564 01c5 00000000 		.4byte	0
+ 2565              	.LLST15:
+ 2566 01c9 08000000 		.4byte	.LVL37
+ 2567 01cd 0A000000 		.4byte	.LVL38
+ 2568 01d1 0200     		.2byte	0x2
+ 2569 01d3 30       		.byte	0x30
+ 2570 01d4 9F       		.byte	0x9f
+ 2571 01d5 0A000000 		.4byte	.LVL38
+ 2572 01d9 36000000 		.4byte	.LVL48
+ 2573 01dd 0100     		.2byte	0x1
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 49
+
+
+ 2574 01df 55       		.byte	0x55
+ 2575 01e0 38000000 		.4byte	.LVL49
+ 2576 01e4 CE000000 		.4byte	.LVL63
+ 2577 01e8 0100     		.2byte	0x1
+ 2578 01ea 55       		.byte	0x55
+ 2579 01eb 00000000 		.4byte	0
+ 2580 01ef 00000000 		.4byte	0
+ 2581              		.section	.debug_aranges,"",%progbits
+ 2582 0000 34000000 		.4byte	0x34
+ 2583 0004 0200     		.2byte	0x2
+ 2584 0006 00000000 		.4byte	.Ldebug_info0
+ 2585 000a 04       		.byte	0x4
+ 2586 000b 00       		.byte	0
+ 2587 000c 0000     		.2byte	0
+ 2588 000e 0000     		.2byte	0
+ 2589 0010 00000000 		.4byte	.LFB65
+ 2590 0014 A2000000 		.4byte	.LFE65-.LFB65
+ 2591 0018 00000000 		.4byte	.LFB66
+ 2592 001c 10000000 		.4byte	.LFE66-.LFB66
+ 2593 0020 00000000 		.4byte	.LFB67
+ 2594 0024 D8000000 		.4byte	.LFE67-.LFB67
+ 2595 0028 00000000 		.4byte	.LFB68
+ 2596 002c 16000000 		.4byte	.LFE68-.LFB68
+ 2597 0030 00000000 		.4byte	0
+ 2598 0034 00000000 		.4byte	0
+ 2599              		.section	.debug_ranges,"",%progbits
+ 2600              	.Ldebug_ranges0:
+ 2601 0000 00000000 		.4byte	.LFB65
+ 2602 0004 A2000000 		.4byte	.LFE65
+ 2603 0008 00000000 		.4byte	.LFB66
+ 2604 000c 10000000 		.4byte	.LFE66
+ 2605 0010 00000000 		.4byte	.LFB67
+ 2606 0014 D8000000 		.4byte	.LFE67
+ 2607 0018 00000000 		.4byte	.LFB68
+ 2608 001c 16000000 		.4byte	.LFE68
+ 2609 0020 00000000 		.4byte	0
+ 2610 0024 00000000 		.4byte	0
+ 2611              		.section	.debug_line,"",%progbits
+ 2612              	.Ldebug_line0:
+ 2613 0000 8D020000 		.section	.debug_str,"MS",%progbits,1
+ 2613      0200DB01 
+ 2613      00000201 
+ 2613      FB0E0D00 
+ 2613      01010101 
+ 2614              	.LASF109:
+ 2615 0000 43794465 		.ascii	"CyDelay\000"
+ 2615      6C617900 
+ 2616              	.LASF34:
+ 2617 0008 464F4E54 		.ascii	"FONT_TYPE_8BPP\000"
+ 2617      5F545950 
+ 2617      455F3842 
+ 2617      505000
+ 2618              	.LASF90:
+ 2619 0017 6465736B 		.ascii	"desktop_color\000"
+ 2619      746F705F 
+ 2619      636F6C6F 
+ 2619      7200
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 50
+
+
+ 2620              	.LASF96:
+ 2621 0025 58505432 		.ascii	"XPT2046_ReadXY\000"
+ 2621      3034365F 
+ 2621      52656164 
+ 2621      585900
+ 2622              	.LASF45:
+ 2623 0034 746F7563 		.ascii	"touch_state\000"
+ 2623      685F7374 
+ 2623      61746500 
+ 2624              	.LASF59:
+ 2625 0040 55475F43 		.ascii	"UG_COLOR\000"
+ 2625      4F4C4F52 
+ 2625      00
+ 2626              	.LASF30:
+ 2627 0049 55475F55 		.ascii	"UG_U16\000"
+ 2627      313600
+ 2628              	.LASF14:
+ 2629 0050 756E7369 		.ascii	"unsigned int\000"
+ 2629      676E6564 
+ 2629      20696E74 
+ 2629      00
+ 2630              	.LASF89:
+ 2631 005d 63686172 		.ascii	"char_v_space\000"
+ 2631      5F765F73 
+ 2631      70616365 
+ 2631      00
+ 2632              	.LASF107:
+ 2633 006a 545F444F 		.ascii	"T_DO_Read\000"
+ 2633      5F526561 
+ 2633      6400
+ 2634              	.LASF97:
+ 2635 0074 636F6F72 		.ascii	"coord\000"
+ 2635      6400
+ 2636              	.LASF8:
+ 2637 007a 5F5F696E 		.ascii	"__int32_t\000"
+ 2637      7433325F 
+ 2637      7400
+ 2638              	.LASF87:
+ 2639 0084 636F6E73 		.ascii	"console\000"
+ 2639      6F6C6500 
+ 2640              	.LASF54:
+ 2641 008c 535F5749 		.ascii	"S_WINDOW\000"
+ 2641      4E444F57 
+ 2641      00
+ 2642              	.LASF46:
+ 2643 0095 75706461 		.ascii	"update\000"
+ 2643      746500
+ 2644              	.LASF82:
+ 2645 009c 795F6469 		.ascii	"y_dim\000"
+ 2645      6D00
+ 2646              	.LASF35:
+ 2647 00a2 464F4E54 		.ascii	"FONT_TYPE\000"
+ 2647      5F545950 
+ 2647      4500
+ 2648              	.LASF56:
+ 2649 00ac 6F626A6C 		.ascii	"objlst\000"
+ 2649      737400
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 51
+
+
+ 2650              	.LASF84:
+ 2651 00b3 6E657874 		.ascii	"next_window\000"
+ 2651      5F77696E 
+ 2651      646F7700 
+ 2652              	.LASF58:
+ 2653 00bf 7469746C 		.ascii	"title\000"
+ 2653      6500
+ 2654              	.LASF20:
+ 2655 00c5 75696E74 		.ascii	"uint32_t\000"
+ 2655      33325F74 
+ 2655      00
+ 2656              	.LASF15:
+ 2657 00ce 696E7438 		.ascii	"int8_t\000"
+ 2657      5F7400
+ 2658              	.LASF32:
+ 2659 00d5 55475F55 		.ascii	"UG_U32\000"
+ 2659      333200
+ 2660              	.LASF76:
+ 2661 00dc 785F656E 		.ascii	"x_end\000"
+ 2661      6400
+ 2662              	.LASF23:
+ 2663 00e2 666C6F61 		.ascii	"float\000"
+ 2663      7400
+ 2664              	.LASF50:
+ 2665 00e8 6576656E 		.ascii	"event\000"
+ 2665      7400
+ 2666              	.LASF86:
+ 2667 00ee 6C617374 		.ascii	"last_window\000"
+ 2667      5F77696E 
+ 2667      646F7700 
+ 2668              	.LASF79:
+ 2669 00fa 6261636B 		.ascii	"back_color\000"
+ 2669      5F636F6C 
+ 2669      6F7200
+ 2670              	.LASF92:
+ 2671 0105 636F756E 		.ascii	"count\000"
+ 2671      7400
+ 2672              	.LASF17:
+ 2673 010b 696E7431 		.ascii	"int16_t\000"
+ 2673      365F7400 
+ 2674              	.LASF13:
+ 2675 0113 6C6F6E67 		.ascii	"long long unsigned int\000"
+ 2675      206C6F6E 
+ 2675      6720756E 
+ 2675      7369676E 
+ 2675      65642069 
+ 2676              	.LASF111:
+ 2677 012a 58505432 		.ascii	"XPT2046.c\000"
+ 2677      3034362E 
+ 2677      6300
+ 2678              	.LASF6:
+ 2679 0134 5F5F7569 		.ascii	"__uint16_t\000"
+ 2679      6E743136 
+ 2679      5F7400
+ 2680              	.LASF85:
+ 2681 013f 61637469 		.ascii	"active_window\000"
+ 2681      76655F77 
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 52
+
+
+ 2681      696E646F 
+ 2681      7700
+ 2682              	.LASF55:
+ 2683 014d 6F626A63 		.ascii	"objcnt\000"
+ 2683      6E7400
+ 2684              	.LASF31:
+ 2685 0154 55475F53 		.ascii	"UG_S16\000"
+ 2685      313600
+ 2686              	.LASF78:
+ 2687 015b 666F7265 		.ascii	"fore_color\000"
+ 2687      5F636F6C 
+ 2687      6F7200
+ 2688              	.LASF73:
+ 2689 0166 795F706F 		.ascii	"y_pos\000"
+ 2689      7300
+ 2690              	.LASF110:
+ 2691 016c 474E5520 		.ascii	"GNU C11 5.4.1 20160609 (release) [ARM/embedded-5-br"
+ 2691      43313120 
+ 2691      352E342E 
+ 2691      31203230 
+ 2691      31363036 
+ 2692 019f 616E6368 		.ascii	"anch revision 237715] -mcpu=cortex-m3 -mthumb -g -O"
+ 2692      20726576 
+ 2692      6973696F 
+ 2692      6E203233 
+ 2692      37373135 
+ 2693 01d2 67202D66 		.ascii	"g -ffunction-sections -ffat-lto-objects\000"
+ 2693      66756E63 
+ 2693      74696F6E 
+ 2693      2D736563 
+ 2693      74696F6E 
+ 2694              	.LASF95:
+ 2695 01fa 58505432 		.ascii	"XPT2046_ReadPos\000"
+ 2695      3034365F 
+ 2695      52656164 
+ 2695      506F7300 
+ 2696              	.LASF37:
+ 2697 020a 63686172 		.ascii	"char_width\000"
+ 2697      5F776964 
+ 2697      746800
+ 2698              	.LASF101:
+ 2699 0215 506F7358 		.ascii	"PosX\000"
+ 2699      00
+ 2700              	.LASF102:
+ 2701 021a 506F7359 		.ascii	"PosY\000"
+ 2701      00
+ 2702              	.LASF108:
+ 2703 021f 545F4353 		.ascii	"T_CS_Write\000"
+ 2703      5F577269 
+ 2703      746500
+ 2704              	.LASF75:
+ 2705 022a 795F7374 		.ascii	"y_start\000"
+ 2705      61727400 
+ 2706              	.LASF66:
+ 2707 0232 765F7370 		.ascii	"v_space\000"
+ 2707      61636500 
+ 2708              	.LASF25:
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 53
+
+
+ 2709 023a 63686172 		.ascii	"char\000"
+ 2709      00
+ 2710              	.LASF106:
+ 2711 023f 43794465 		.ascii	"CyDelayCycles\000"
+ 2711      6C617943 
+ 2711      79636C65 
+ 2711      7300
+ 2712              	.LASF36:
+ 2713 024d 666F6E74 		.ascii	"font_type\000"
+ 2713      5F747970 
+ 2713      6500
+ 2714              	.LASF60:
+ 2715 0257 55475F41 		.ascii	"UG_AREA\000"
+ 2715      52454100 
+ 2716              	.LASF62:
+ 2717 025f 55475F4D 		.ascii	"UG_MESSAGE\000"
+ 2717      45535341 
+ 2717      474500
+ 2718              	.LASF22:
+ 2719 026a 75696E74 		.ascii	"uint16\000"
+ 2719      313600
+ 2720              	.LASF51:
+ 2721 0271 64617461 		.ascii	"data\000"
+ 2721      00
+ 2722              	.LASF99:
+ 2723 0276 58505432 		.ascii	"XPT2046_ReadZ\000"
+ 2723      3034365F 
+ 2723      52656164 
+ 2723      5A00
+ 2724              	.LASF16:
+ 2725 0284 75696E74 		.ascii	"uint8_t\000"
+ 2725      385F7400 
+ 2726              	.LASF83:
+ 2727 028c 746F7563 		.ascii	"touch\000"
+ 2727      6800
+ 2728              	.LASF70:
+ 2729 0292 64726976 		.ascii	"driver\000"
+ 2729      657200
+ 2730              	.LASF29:
+ 2731 0299 55475F53 		.ascii	"UG_S8\000"
+ 2731      3800
+ 2732              	.LASF112:
+ 2733 029f 433A5C55 		.ascii	"C:\\Users\\afne7\\Desktop\\SAFE\\Firmware\\LCD_test"
+ 2733      73657273 
+ 2733      5C61666E 
+ 2733      65375C44 
+ 2733      65736B74 
+ 2734 02cc 5C544654 		.ascii	"\\TFT_SSD1963\\TFT_test.cydsn\000"
+ 2734      5F535344 
+ 2734      31393633 
+ 2734      5C544654 
+ 2734      5F746573 
+ 2735              	.LASF81:
+ 2736 02e8 785F6469 		.ascii	"x_dim\000"
+ 2736      6D00
+ 2737              	.LASF12:
+ 2738 02ee 6C6F6E67 		.ascii	"long long int\000"
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 54
+
+
+ 2738      206C6F6E 
+ 2738      6720696E 
+ 2738      7400
+ 2739              	.LASF4:
+ 2740 02fc 5F5F696E 		.ascii	"__int16_t\000"
+ 2740      7431365F 
+ 2740      7400
+ 2741              	.LASF43:
+ 2742 0306 55475F4F 		.ascii	"UG_OBJECT\000"
+ 2742      424A4543 
+ 2742      5400
+ 2743              	.LASF80:
+ 2744 0310 70736574 		.ascii	"pset\000"
+ 2744      00
+ 2745              	.LASF61:
+ 2746 0315 7375625F 		.ascii	"sub_id\000"
+ 2746      696400
+ 2747              	.LASF68:
+ 2748 031c 68656967 		.ascii	"height\000"
+ 2748      687400
+ 2749              	.LASF39:
+ 2750 0323 73746172 		.ascii	"start_char\000"
+ 2750      745F6368 
+ 2750      617200
+ 2751              	.LASF93:
+ 2752 032e 52656164 		.ascii	"Read_2046\000"
+ 2752      5F323034 
+ 2752      3600
+ 2753              	.LASF28:
+ 2754 0338 55475F55 		.ascii	"UG_U8\000"
+ 2754      3800
+ 2755              	.LASF0:
+ 2756 033e 5F5F696E 		.ascii	"__int8_t\000"
+ 2756      74385F74 
+ 2756      00
+ 2757              	.LASF41:
+ 2758 0347 77696474 		.ascii	"widths\000"
+ 2758      687300
+ 2759              	.LASF26:
+ 2760 034e 6C6F6E67 		.ascii	"long double\000"
+ 2760      20646F75 
+ 2760      626C6500 
+ 2761              	.LASF18:
+ 2762 035a 75696E74 		.ascii	"uint16_t\000"
+ 2762      31365F74 
+ 2762      00
+ 2763              	.LASF103:
+ 2764 0363 67756931 		.ascii	"gui1963\000"
+ 2764      39363300 
+ 2765              	.LASF69:
+ 2766 036b 55475F54 		.ascii	"UG_TITLE\000"
+ 2766      49544C45 
+ 2766      00
+ 2767              	.LASF98:
+ 2768 0374 74696D65 		.ascii	"timeout\000"
+ 2768      6F757400 
+ 2769              	.LASF71:
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 55
+
+
+ 2770 037c 55475F44 		.ascii	"UG_DRIVER\000"
+ 2770      52495645 
+ 2770      5200
+ 2771              	.LASF72:
+ 2772 0386 785F706F 		.ascii	"x_pos\000"
+ 2772      7300
+ 2773              	.LASF38:
+ 2774 038c 63686172 		.ascii	"char_height\000"
+ 2774      5F686569 
+ 2774      67687400 
+ 2775              	.LASF5:
+ 2776 0398 73686F72 		.ascii	"short int\000"
+ 2776      7420696E 
+ 2776      7400
+ 2777              	.LASF9:
+ 2778 03a2 6C6F6E67 		.ascii	"long int\000"
+ 2778      20696E74 
+ 2778      00
+ 2779              	.LASF52:
+ 2780 03ab 55475F57 		.ascii	"UG_WINDOW\000"
+ 2780      494E444F 
+ 2780      5700
+ 2781              	.LASF100:
+ 2782 03b5 49544D5F 		.ascii	"ITM_RxBuffer\000"
+ 2782      52784275 
+ 2782      66666572 
+ 2782      00
+ 2783              	.LASF113:
+ 2784 03c2 58505432 		.ascii	"XPT2046_Start\000"
+ 2784      3034365F 
+ 2784      53746172 
+ 2784      7400
+ 2785              	.LASF105:
+ 2786 03d0 545F4449 		.ascii	"T_DIN_Write\000"
+ 2786      4E5F5772 
+ 2786      69746500 
+ 2787              	.LASF40:
+ 2788 03dc 656E645F 		.ascii	"end_char\000"
+ 2788      63686172 
+ 2788      00
+ 2789              	.LASF42:
+ 2790 03e5 55475F46 		.ascii	"UG_FONT\000"
+ 2790      4F4E5400 
+ 2791              	.LASF1:
+ 2792 03ed 5F5F7569 		.ascii	"__uint8_t\000"
+ 2792      6E74385F 
+ 2792      7400
+ 2793              	.LASF104:
+ 2794 03f7 545F434C 		.ascii	"T_CLK_Write\000"
+ 2794      4B5F5772 
+ 2794      69746500 
+ 2795              	.LASF64:
+ 2796 0403 666F6E74 		.ascii	"font\000"
+ 2796      00
+ 2797              	.LASF27:
+ 2798 0408 73697A65 		.ascii	"sizetype\000"
+ 2798      74797065 
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 56
+
+
+ 2798      00
+ 2799              	.LASF11:
+ 2800 0411 6C6F6E67 		.ascii	"long unsigned int\000"
+ 2800      20756E73 
+ 2800      69676E65 
+ 2800      6420696E 
+ 2800      7400
+ 2801              	.LASF19:
+ 2802 0423 696E7433 		.ascii	"int32_t\000"
+ 2802      325F7400 
+ 2803              	.LASF94:
+ 2804 042b 57726974 		.ascii	"Write_2046\000"
+ 2804      655F3230 
+ 2804      343600
+ 2805              	.LASF49:
+ 2806 0436 74797065 		.ascii	"type\000"
+ 2806      00
+ 2807              	.LASF3:
+ 2808 043b 756E7369 		.ascii	"unsigned char\000"
+ 2808      676E6564 
+ 2808      20636861 
+ 2808      7200
+ 2809              	.LASF10:
+ 2810 0449 5F5F7569 		.ascii	"__uint32_t\000"
+ 2810      6E743332 
+ 2810      5F7400
+ 2811              	.LASF65:
+ 2812 0454 685F7370 		.ascii	"h_space\000"
+ 2812      61636500 
+ 2813              	.LASF74:
+ 2814 045c 785F7374 		.ascii	"x_start\000"
+ 2814      61727400 
+ 2815              	.LASF77:
+ 2816 0464 795F656E 		.ascii	"y_end\000"
+ 2816      6400
+ 2817              	.LASF57:
+ 2818 046a 7374796C 		.ascii	"style\000"
+ 2818      6500
+ 2819              	.LASF44:
+ 2820 0470 73746174 		.ascii	"state\000"
+ 2820      6500
+ 2821              	.LASF91:
+ 2822 0476 55475F47 		.ascii	"UG_GUI\000"
+ 2822      554900
+ 2823              	.LASF48:
+ 2824 047d 615F7265 		.ascii	"a_rel\000"
+ 2824      6C00
+ 2825              	.LASF63:
+ 2826 0483 55475F54 		.ascii	"UG_TOUCH\000"
+ 2826      4F554348 
+ 2826      00
+ 2827              	.LASF2:
+ 2828 048c 7369676E 		.ascii	"signed char\000"
+ 2828      65642063 
+ 2828      68617200 
+ 2829              	.LASF7:
+ 2830 0498 73686F72 		.ascii	"short unsigned int\000"
+ARM GAS  C:\Users\afne7\AppData\Local\Temp\ccBM2NZE.s 			page 57
+
+
+ 2830      7420756E 
+ 2830      7369676E 
+ 2830      65642069 
+ 2830      6E7400
+ 2831              	.LASF21:
+ 2832 04ab 75696E74 		.ascii	"uint8\000"
+ 2832      3800
+ 2833              	.LASF24:
+ 2834 04b1 646F7562 		.ascii	"double\000"
+ 2834      6C6500
+ 2835              	.LASF53:
+ 2836 04b8 535F4F42 		.ascii	"S_OBJECT\000"
+ 2836      4A454354 
+ 2836      00
+ 2837              	.LASF67:
+ 2838 04c1 616C6967 		.ascii	"align\000"
+ 2838      6E00
+ 2839              	.LASF47:
+ 2840 04c7 615F6162 		.ascii	"a_abs\000"
+ 2840      7300
+ 2841              	.LASF33:
+ 2842 04cd 464F4E54 		.ascii	"FONT_TYPE_1BPP\000"
+ 2842      5F545950 
+ 2842      455F3142 
+ 2842      505000
+ 2843              	.LASF88:
+ 2844 04dc 63686172 		.ascii	"char_h_space\000"
+ 2844      5F685F73 
+ 2844      70616365 
+ 2844      00
+ 2845              		.ident	"GCC: (GNU Tools for ARM Embedded Processors) 5.4.1 20160609 (release) [ARM/embedded-5-bran
