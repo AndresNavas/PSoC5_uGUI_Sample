@@ -15,5 +15,8 @@ http://embeddedlightning.com/ugui/ <br>
 <br></p>
 Where to find the LCD Panel:<br>
 https://www.aliexpress.com/item/Consumer-Electronics-Shop-Free-shipping-5-TFT-LCD-SS63-Module-Display-Touch-Panel-Screen-PCB-Adapter/32603464488.html?spm=a2g0s.9042311.0.0.27424c4dwb4qzi <br>
-<br>
+<br></p>
+Sample Project with SDCard integration adn 16bits data BUS: <br>
+https://github.com/AndresNavas/PSoC5_uGUI_SD_Sample <br>
+<br><br>
 <h4> Created by Andres Navas 2018
